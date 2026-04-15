@@ -1,0 +1,36 @@
+{
+  "name": "marketing-os",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Marketing Operating System — Kontroll-, Persistenz-, Analyse- und Integrationsschicht für agentisches Marketing.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "seed:pflegemax": "tsx scripts/seed-pflegemax.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "test": "node --test --import tsx tests/**/*.test.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.20.0",
+    "fastify": "^4.28.0",
+    "pino": "^9.4.0",
+    "ulid": "^2.3.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "prisma": "^5.20.0",
+    "resolve-pkg-maps": "^1.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

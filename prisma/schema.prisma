@@ -1,0 +1,546 @@
+// Marketing OS — Prisma Schema (Phase 1 MVP)
+// Siehe docs/architecture/data-model.md für Kontext.
+//
+// Konventionen:
+// - IDs sind Strings mit Prefix (ULID), generiert in der Anwendung (src/lib/ids.ts).
+// - Mandantenfähigkeit: jede mandantenbehaftete Tabelle hat workspaceId.
+// - Historie: ChangeEvent ist append-only, polymorph über subjectType/subjectId.
+// - Zeitreihen: PerformanceSnapshotDaily, ProductOutcomeEvent.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Tenancy & Stammdaten
+// ────────────────────────────────────────────────────────────────────
+
+model Workspace {
+  id        String   @id
+  slug      String   @unique
+  name      String
+  timezone  String   @default("Europe/Berlin")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  brands               Brand[]
+  products             Product[]
+  initiatives          Initiative[]
+  campaigns            Campaign[]
+  assets               Asset[]
+  integrationAccounts  IntegrationAccount[]
+  channelConnections   ChannelConnection[]
+  changeEvents         ChangeEvent[]
+  approvals            Approval[]
+  annotations          Annotation[]
+  syncRuns             SyncRun[]
+  learnings            Learning[]
+  experiments          Experiment[]
+  hypotheses           Hypothesis[]
+  audienceSegments     AudienceSegment[]
+}
+
+model Brand {
+  id          String   @id
+  workspaceId String
+  name        String
+  slug        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  products  Product[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
+}
+
+model Product {
+  id          String   @id
+  workspaceId String
+  brandId     String
+  slug        String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  brand     Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  audienceSegments AudienceSegment[]
+  campaigns        Campaign[]
+  outcomes         ProductOutcomeEvent[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
+  @@index([brandId])
+}
+
+model AudienceSegment {
+  id          String   @id
+  workspaceId String
+  productId   String
+  name        String
+  description String?
+  facets      Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  campaigns Campaign[]
+
+  @@index([workspaceId])
+  @@index([productId])
+}
+
+model Actor {
+  id        String   @id
+  type      ActorType
+  handle    String   @unique
+  agentRole String?
+  createdAt DateTime @default(now())
+}
+
+enum ActorType {
+  HUMAN
+  AGENT
+  SYSTEM
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Strategie & Initiativen
+// ────────────────────────────────────────────────────────────────────
+
+model Initiative {
+  id          String           @id
+  workspaceId String
+  title       String
+  goal        String
+  status      InitiativeStatus @default(PROPOSED)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  hypotheses  Hypothesis[]
+  campaigns   Campaign[]
+  learnings   Learning[]
+
+  @@index([workspaceId, status])
+}
+
+enum InitiativeStatus {
+  PROPOSED
+  ACTIVE
+  ON_HOLD
+  DONE
+  CANCELLED
+}
+
+model Hypothesis {
+  id           String   @id
+  workspaceId  String
+  initiativeId String?
+  statement    String
+  rationale    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  initiative  Initiative?  @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
+  experiments Experiment[]
+  learnings   Learning[]
+
+  @@index([workspaceId])
+  @@index([initiativeId])
+}
+
+model Experiment {
+  id            String           @id
+  workspaceId   String
+  hypothesisId  String?
+  title         String
+  description   String?
+  status        ExperimentStatus @default(DESIGN)
+  startedAt     DateTime?
+  endedAt       DateTime?
+  conclusion    String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  hypothesis Hypothesis? @relation(fields: [hypothesisId], references: [id], onDelete: SetNull)
+  learnings  Learning[]
+
+  @@index([workspaceId, status])
+}
+
+enum ExperimentStatus {
+  DESIGN
+  RUNNING
+  ANALYZING
+  CONCLUDED
+  ABORTED
+}
+
+model Learning {
+  id            String              @id
+  workspaceId   String
+  initiativeId  String?
+  hypothesisId  String?
+  experimentId  String?
+  statement     String
+  confidence    LearningConfidence  @default(MEDIUM)
+  evidence      Json                @default("[]")
+  validUntil    DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  initiative Initiative? @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
+  hypothesis Hypothesis? @relation(fields: [hypothesisId], references: [id], onDelete: SetNull)
+  experiment Experiment? @relation(fields: [experimentId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([initiativeId])
+}
+
+enum LearningConfidence {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Kampagnen & Assets
+// ────────────────────────────────────────────────────────────────────
+
+model Campaign {
+  id                String          @id
+  workspaceId       String
+  productId         String
+  initiativeId      String?
+  audienceSegmentId String?
+  name              String
+  objective         String
+  status            CampaignStatus  @default(DRAFT)
+  startsAt          DateTime?
+  endsAt            DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  createdByActorId  String?
+
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product          Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  initiative       Initiative?       @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
+  audienceSegment  AudienceSegment?  @relation(fields: [audienceSegmentId], references: [id], onDelete: SetNull)
+  channelCampaigns ChannelCampaign[]
+  campaignAssets   CampaignAsset[]
+
+  @@index([workspaceId, status])
+  @@index([productId])
+  @@index([initiativeId])
+}
+
+enum CampaignStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  SYNCED
+  PAUSED
+  ARCHIVED
+}
+
+model ChannelCampaign {
+  id                  String    @id
+  workspaceId         String
+  campaignId          String
+  channel             ChannelId
+  channelConnectionId String?
+  externalId          String?
+  externalName        String?
+  status              CampaignStatus @default(DRAFT)
+  lastSyncedAt        DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  campaign          Campaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  channelConnection ChannelConnection? @relation(fields: [channelConnectionId], references: [id], onDelete: SetNull)
+  adGroups          ChannelAdGroup[]
+  performance       PerformanceSnapshotDaily[]
+
+  @@unique([channel, externalId])
+  @@index([workspaceId])
+  @@index([campaignId])
+}
+
+model ChannelAdGroup {
+  id                String   @id
+  channelCampaignId String
+  externalId        String?
+  name              String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  channelCampaign ChannelCampaign @relation(fields: [channelCampaignId], references: [id], onDelete: Cascade)
+
+  @@index([channelCampaignId])
+}
+
+enum ChannelId {
+  GOOGLE_ADS
+  META_ADS
+}
+
+model Asset {
+  id          String    @id
+  workspaceId String
+  kind        AssetKind
+  name        String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  versions       AssetVersion[]
+  campaignAssets CampaignAsset[]
+
+  @@index([workspaceId, kind])
+}
+
+enum AssetKind {
+  HEADLINE_SET
+  DESCRIPTION_SET
+  IMAGE
+  VIDEO
+  LANDING_PAGE
+  TEXT_BLOCK
+}
+
+model AssetVersion {
+  id           String              @id
+  assetId      String
+  versionNum   Int
+  status       AssetVersionStatus  @default(DRAFT)
+  content      Json
+  contentHash  String
+  authorActorId String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, versionNum])
+  @@index([assetId, status])
+}
+
+enum AssetVersionStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  PUBLISHED
+  SUPERSEDED
+}
+
+model CampaignAsset {
+  campaignId String
+  assetId    String
+  role       String
+  createdAt  DateTime @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  asset    Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, assetId, role])
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Lifecycle / Approvals / Sync / Events
+// ────────────────────────────────────────────────────────────────────
+
+model Approval {
+  id          String           @id
+  workspaceId String
+  targetType  String
+  targetId    String
+  decision    ApprovalDecision
+  comment     String?
+  actorId     String?
+  createdAt   DateTime         @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, targetType, targetId])
+}
+
+enum ApprovalDecision {
+  REQUESTED
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+}
+
+model SyncRun {
+  id              String         @id
+  workspaceId     String
+  channel         ChannelId
+  type            SyncRunType
+  targetType      String
+  targetId        String
+  status          SyncRunStatus  @default(PENDING)
+  idempotencyKey  String
+  input           Json
+  output          Json?
+  errorKind       String?
+  errorMessage    String?
+  attempt         Int            @default(0)
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime       @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId, status])
+  @@index([channel, status])
+}
+
+enum SyncRunType {
+  PULL_PERFORMANCE
+  PUSH_CAMPAIGN
+  PUSH_ASSET_VERSION
+}
+
+enum SyncRunStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  PARTIAL
+}
+
+model ChangeEvent {
+  id           String   @id
+  workspaceId  String
+  subjectType  String
+  subjectId    String
+  actorId      String?
+  kind         String
+  summary      String
+  payload      Json     @default("{}")
+  correctsId   String?
+  at           DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, subjectType, subjectId])
+  @@index([workspaceId, at])
+}
+
+model Annotation {
+  id          String   @id
+  workspaceId String
+  subjectType String
+  subjectId   String
+  body        String
+  pinned      Boolean  @default(false)
+  actorId     String?
+  occurredAt  DateTime
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, subjectType, subjectId])
+  @@index([workspaceId, occurredAt])
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Integration
+// ────────────────────────────────────────────────────────────────────
+
+model IntegrationAccount {
+  id          String    @id
+  workspaceId String
+  channel     ChannelId
+  label       String
+  externalId  String
+  credentials Json
+  status      IntegrationStatus @default(ACTIVE)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connections ChannelConnection[]
+
+  @@unique([workspaceId, channel, externalId])
+  @@index([workspaceId])
+}
+
+enum IntegrationStatus {
+  ACTIVE
+  NEEDS_REAUTH
+  DISABLED
+}
+
+model ChannelConnection {
+  id                   String   @id
+  workspaceId          String
+  integrationAccountId String
+  scopeProductId       String?
+  label                String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  integrationAccount IntegrationAccount @relation(fields: [integrationAccountId], references: [id], onDelete: Cascade)
+  channelCampaigns   ChannelCampaign[]
+
+  @@index([workspaceId])
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Zeitreihen: Performance & Outcomes
+// ────────────────────────────────────────────────────────────────────
+
+model PerformanceSnapshotDaily {
+  id                String   @id
+  channelCampaignId String
+  date              DateTime @db.Date
+  impressions       Int      @default(0)
+  clicks            Int      @default(0)
+  costMicros        BigInt   @default(0)
+  conversions       Decimal  @default(0) @db.Decimal(14, 4)
+  conversionValue   Decimal  @default(0) @db.Decimal(14, 4)
+  raw               Json     @default("{}")
+  pulledAt          DateTime @default(now())
+  syncRunId         String?
+
+  channelCampaign ChannelCampaign @relation(fields: [channelCampaignId], references: [id], onDelete: Cascade)
+
+  @@unique([channelCampaignId, date])
+  @@index([date])
+}
+
+model ProductOutcomeEvent {
+  id           String   @id
+  productId    String
+  type         String
+  occurredAt   DateTime
+  sessionRef   String?
+  attribution  Json     @default("{}")
+  payload      Json     @default("{}")
+  ingestedAt   DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, type, occurredAt])
+  @@index([productId, occurredAt])
+}

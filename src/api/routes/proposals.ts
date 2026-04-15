@@ -1,0 +1,29 @@
+import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import { proposalService } from "../../services/proposal.service.js";
+import { WorkspaceIdSchema } from "../schemas.js";
+
+const Area = z.enum(["data_model", "api", "reporting", "workflow", "other"]);
+
+const CreateProposalSchema = z.object({
+  workspaceId: WorkspaceIdSchema,
+  area: Area,
+  title: z.string().min(1).max(200),
+  rationale: z.string().min(1).max(4000),
+  impact: z.string().max(2000).optional(),
+  examples: z.array(z.string()).optional(),
+  actorId: z.string().optional(),
+});
+
+export async function registerProposalRoutes(app: FastifyInstance): Promise<void> {
+  app.post("/proposals", async (req) => {
+    const body = CreateProposalSchema.parse(req.body);
+    const id = await proposalService.submit(body);
+    return { id };
+  });
+
+  app.get("/proposals", async (req) => {
+    const q = z.object({ workspaceId: WorkspaceIdSchema, area: Area.optional() }).parse(req.query);
+    return proposalService.list(q.workspaceId, q.area);
+  });
+}
