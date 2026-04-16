@@ -25,11 +25,12 @@ function requireEnv(key: string): string {
   return val;
 }
 
-async function gadsRequest(
-  path: string,
+async function googleAdsRequest(
+  method: string,
+  url: string,
   accessToken: string,
   developerToken: string,
-  body: unknown,
+  body?: unknown,
   loginCustomerId?: string,
 ): Promise<unknown> {
   const headers: Record<string, string> = {
@@ -41,45 +42,46 @@ async function gadsRequest(
     headers["login-customer-id"] = loginCustomerId;
   }
 
-  const res = await fetch(`${BASE}${path}`, {
-    method: "POST",
+  const response = await fetch(url, {
+    method,
     headers,
-    body: JSON.stringify(body),
+    body: body ? JSON.stringify(body) : undefined,
   });
 
-  if (res.status === 401) {
-    throw new ConnectorError("AUTH", `Google Ads API 401: ${await res.text()}`);
+  if (!response.ok) {
+    const text = await response.text();
+    if (response.status === 401) throw new ConnectorError("AUTH", `Google Ads 401: ${text}`);
+    if (response.status === 429)
+      throw new ConnectorError("RATE_LIMIT", `Google Ads 429: ${text}`, undefined, 60);
+    throw new ConnectorError("TRANSIENT", `Google Ads ${response.status}: ${text}`);
   }
-  if (res.status === 429) {
-    const retry = res.headers.get("retry-after");
-    throw new ConnectorError(
-      "RATE_LIMIT",
-      "Google Ads API rate limit",
-      undefined,
-      retry ? parseInt(retry, 10) : 60,
-    );
-  }
-  if (!res.ok) {
-    const text = await res.text();
-    throw new ConnectorError("TRANSIENT", `Google Ads API ${res.status}: ${text}`);
-  }
-  return res.json();
+
+  return response.json();
 }
 
 export class GoogleAdsConnector implements ChannelConnector {
   readonly id = "google_ads" as const;
 
   private cachedTokens: GoogleAdsTokens | null = null;
+  private accessToken: string | null = null;
+  private developerToken: string | null = null;
+  private loginCustomerId: string | undefined = undefined;
 
   async authenticate(account: IntegrationAccountRef): Promise<ConnectionHandle> {
     if (account.channel !== "google_ads") {
       throw new ConnectorError("VALIDATION", "Account channel mismatch");
     }
 
+    const env = loadEnv();
+    this.developerToken = requireEnv("GOOGLE_ADS_DEVELOPER_TOKEN");
+    this.loginCustomerId = env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
+    const customerId = requireEnv("GOOGLE_ADS_CUSTOMER_ID");
+
     if (this.cachedTokens && this.cachedTokens.expiresAt > new Date()) {
+      this.accessToken = this.cachedTokens.accessToken;
       return {
         channel: "google_ads",
-        accountId: account.externalId,
+        accountId: customerId,
         expiresAt: this.cachedTokens.expiresAt,
       };
     }
@@ -89,43 +91,28 @@ export class GoogleAdsConnector implements ChannelConnector {
     const refreshToken = requireEnv("GOOGLE_ADS_REFRESH_TOKEN");
 
     this.cachedTokens = await refreshAccessToken(clientId, clientSecret, refreshToken);
+    this.accessToken = this.cachedTokens.accessToken;
 
     return {
       channel: "google_ads",
-      accountId: account.externalId,
+      accountId: customerId,
       expiresAt: this.cachedTokens.expiresAt,
     };
   }
 
   async pullPerformance(input: PullPerformanceInput): Promise<PerformancePullResult> {
-    const accessToken = this.getAccessToken();
-    const developerToken = requireEnv("GOOGLE_ADS_DEVELOPER_TOKEN");
-    const env = loadEnv();
+    this.ensureAuthenticated();
     const customerId = input.connection.accountId;
 
-    const query = `
-      SELECT
-        campaign.id,
-        campaign.name,
-        ad_group.id,
-        ad_group.name,
-        metrics.impressions,
-        metrics.clicks,
-        metrics.cost_micros,
-        metrics.conversions,
-        metrics.conversions_value,
-        segments.date
-      FROM ad_group
-      WHERE segments.date BETWEEN '${fmtDate(input.from)}' AND '${fmtDate(input.to)}'
-        AND campaign.status != 'REMOVED'
-    `.trim();
+    const query = `SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM ad_group WHERE segments.date BETWEEN '${fmtDate(input.from)}' AND '${fmtDate(input.to)}' AND campaign.status != 'REMOVED'`;
 
-    const data = (await gadsRequest(
-      `/customers/${customerId}/googleAds:searchStream`,
-      accessToken,
-      developerToken,
+    const data = (await googleAdsRequest(
+      "POST",
+      `${BASE}/customers/${customerId}/googleAds:searchStream`,
+      this.accessToken!,
+      this.developerToken!,
       { query },
-      env.GOOGLE_ADS_LOGIN_CUSTOMER_ID,
+      this.loginCustomerId,
     )) as Array<{ results?: Array<Record<string, unknown>> }>;
 
     const rows: NormalizedPerformanceRow[] = [];
@@ -143,11 +130,11 @@ export class GoogleAdsConnector implements ChannelConnector {
           externalCampaignId: String(campaign.id),
           externalAdGroupId: adGroup?.id ? String(adGroup.id) : undefined,
           date: new Date(segments.date),
-          impressions: Number(metrics.impressions ?? 0),
-          clicks: Number(metrics.clicks ?? 0),
+          impressions: parseInt(String(metrics.impressions), 10) || 0,
+          clicks: parseInt(String(metrics.clicks), 10) || 0,
           costMicros: BigInt(String(metrics.costMicros ?? "0")),
-          conversions: Number(metrics.conversions ?? 0),
-          conversionValue: Number(metrics.conversionsValue ?? 0),
+          conversions: parseFloat(String(metrics.conversions)) || 0,
+          conversionValue: parseFloat(String(metrics.conversionsValue)) || 0,
           raw: row as Record<string, unknown>,
         });
       }
@@ -157,11 +144,8 @@ export class GoogleAdsConnector implements ChannelConnector {
   }
 
   async pushCampaign(input: PushCampaignInput): Promise<SyncRunResult> {
-    const accessToken = this.getAccessToken();
-    const developerToken = requireEnv("GOOGLE_ADS_DEVELOPER_TOKEN");
-    const env = loadEnv();
+    this.ensureAuthenticated();
     const customerId = input.connection.accountId;
-    const loginCustomerId = env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
     const p = input.payload as {
       campaignName: string;
       headlines: string[];
@@ -172,8 +156,16 @@ export class GoogleAdsConnector implements ChannelConnector {
     };
 
     const request = async (path: string, body: unknown) =>
-      gadsRequest(path, accessToken, developerToken, body, loginCustomerId);
+      googleAdsRequest(
+        "POST",
+        `${BASE}${path}`,
+        this.accessToken!,
+        this.developerToken!,
+        body,
+        this.loginCustomerId,
+      );
 
+    // A — Campaign Budget
     const budgetRes = (await request(`/customers/${customerId}/campaignBudgets:mutate`, {
       operations: [
         {
@@ -181,26 +173,32 @@ export class GoogleAdsConnector implements ChannelConnector {
             name: `${p.campaignName} Budget`,
             amountMicros: "10000000",
             deliveryMethod: "STANDARD",
+            explicitlyShared: false,
           },
         },
       ],
     })) as { results: Array<{ resourceName: string }> };
     const budgetResource = budgetRes.results[0]!.resourceName;
+    const budgetId = budgetResource.split("/").pop()!;
 
+    // B — Campaign (PAUSED)
     const campaignRes = (await request(`/customers/${customerId}/campaigns:mutate`, {
       operations: [
         {
           create: {
             name: p.campaignName,
-            status: "PAUSED",
             advertisingChannelType: "SEARCH",
+            status: "PAUSED",
             manualCpc: {},
             campaignBudget: budgetResource,
             networkSettings: {
               targetGoogleSearch: true,
               targetSearchNetwork: false,
               targetContentNetwork: false,
-              targetPartnerSearchNetwork: false,
+            },
+            geoTargetTypeSetting: {
+              positiveGeoTargetType: "PRESENCE",
+              negativeGeoTargetType: "PRESENCE_OR_INTEREST",
             },
           },
         },
@@ -209,18 +207,21 @@ export class GoogleAdsConnector implements ChannelConnector {
     const campaignResource = campaignRes.results[0]!.resourceName;
     const campaignId = campaignResource.split("/").pop()!;
 
-    // Geo-Targeting: Deutschland (ID 2276)
+    // C — Geo-Targeting: Deutschland (2276)
     await request(`/customers/${customerId}/campaignCriteria:mutate`, {
       operations: [
         {
           create: {
             campaign: campaignResource,
-            location: { geoTargetConstant: `geoTargetConstants/2276` },
+            location: {
+              geoTargetConstant: "geoTargetConstants/2276",
+            },
           },
         },
       ],
     });
 
+    // D — Ad Group
     const adGroupRes = (await request(`/customers/${customerId}/adGroups:mutate`, {
       operations: [
         {
@@ -229,7 +230,7 @@ export class GoogleAdsConnector implements ChannelConnector {
             campaign: campaignResource,
             status: "ENABLED",
             type: "SEARCH_STANDARD",
-            cpcBidMicros: "1000000",
+            cpcBidMicros: "2000000",
           },
         },
       ],
@@ -237,48 +238,62 @@ export class GoogleAdsConnector implements ChannelConnector {
     const adGroupResource = adGroupRes.results[0]!.resourceName;
     const adGroupId = adGroupResource.split("/").pop()!;
 
+    // E — RSA (Responsive Search Ad)
     const headlines = p.headlines.slice(0, 15).map((text) => ({
       text: text.slice(0, 30),
+      pinnedField: null,
     }));
     const descriptions = p.descriptions.slice(0, 4).map((text) => ({
       text: text.slice(0, 90),
+      pinnedField: null,
     }));
 
-    const adRes = (await request(`/customers/${customerId}/adGroupAds:mutate`, {
+    await request(`/customers/${customerId}/adGroupAds:mutate`, {
       operations: [
         {
           create: {
             adGroup: adGroupResource,
             status: "ENABLED",
             ad: {
-              responsiveSearchAd: { headlines, descriptions },
+              responsiveSearchAd: {
+                headlines,
+                descriptions,
+                path1: "pflegegeld",
+                path2: "hilfe",
+              },
               finalUrls: [p.targetUrl],
             },
           },
         },
       ],
-    })) as { results: Array<{ resourceName: string }> };
-    const adResource = adRes.results[0]!.resourceName;
-    const adId = adResource.split("/").pop()!;
+    });
 
+    // F — Keywords (Phrase Match)
     if (p.keywords.length > 0) {
       await request(`/customers/${customerId}/adGroupCriteria:mutate`, {
         operations: p.keywords.map((kw) => ({
           create: {
             adGroup: adGroupResource,
-            keyword: { text: kw, matchType: "PHRASE" },
+            keyword: {
+              text: kw,
+              matchType: "PHRASE",
+            },
           },
         })),
       });
     }
 
+    // G — Negative Keywords (Campaign-Level, Broad Match)
     if (p.negativeKeywords.length > 0) {
       await request(`/customers/${customerId}/campaignCriteria:mutate`, {
-        operations: p.negativeKeywords.map((kw) => ({
+        operations: p.negativeKeywords.map((nkw) => ({
           create: {
             campaign: campaignResource,
             negative: true,
-            keyword: { text: kw, matchType: "BROAD" },
+            keyword: {
+              text: nkw,
+              matchType: "BROAD",
+            },
           },
         })),
       });
@@ -288,19 +303,19 @@ export class GoogleAdsConnector implements ChannelConnector {
       externalIds: {
         campaignId,
         adGroupId,
-        adId,
-        campaignResource,
-        adGroupResource,
-        budgetResource,
+        budgetId,
       },
+      payload: { status: "PAUSED" },
     };
   }
 
-  private getAccessToken(): string {
-    if (!this.cachedTokens || this.cachedTokens.expiresAt <= new Date()) {
+  private ensureAuthenticated(): void {
+    if (!this.accessToken || !this.developerToken) {
       throw new ConnectorError("AUTH", "Not authenticated — call authenticate() first");
     }
-    return this.cachedTokens.accessToken;
+    if (this.cachedTokens && this.cachedTokens.expiresAt <= new Date()) {
+      throw new ConnectorError("AUTH", "Access token expired — call authenticate() again");
+    }
   }
 }
 

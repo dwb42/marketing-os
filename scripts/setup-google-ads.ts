@@ -3,7 +3,6 @@ import { loadEnv } from "../src/config/env.js";
 import { newId } from "../src/lib/ids.js";
 import { refreshAccessToken } from "../src/connectors/google-ads/auth.js";
 import { logger } from "../src/lib/logger.js";
-import { encryptSecret } from "../src/lib/secrets.js";
 
 const WORKSPACE = "wsp_pflegemax_team";
 
@@ -27,17 +26,21 @@ async function main() {
   const tokens = await refreshAccessToken(clientId, clientSecret, refreshToken);
   logger.info({ expiresAt: tokens.expiresAt.toISOString() }, "token refresh ok");
 
-  logger.info("testing Google Ads API access...");
+  logger.info("testing Google Ads API with GAQL...");
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${tokens.accessToken}`,
+    "developer-token": developerToken,
+    "Content-Type": "application/json",
+  };
+  if (env.GOOGLE_ADS_LOGIN_CUSTOMER_ID) {
+    headers["login-customer-id"] = env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
+  }
   const testRes = await fetch(
-    `https://googleads.googleapis.com/v18/customers/${customerId}`,
+    `https://googleads.googleapis.com/v18/customers/${customerId}/googleAds:searchStream`,
     {
-      headers: {
-        Authorization: `Bearer ${tokens.accessToken}`,
-        "developer-token": developerToken,
-        ...(env.GOOGLE_ADS_LOGIN_CUSTOMER_ID
-          ? { "login-customer-id": env.GOOGLE_ADS_LOGIN_CUSTOMER_ID }
-          : {}),
-      },
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query: "SELECT customer.id FROM customer LIMIT 1" }),
     },
   );
   if (!testRes.ok) {
@@ -46,9 +49,14 @@ async function main() {
   }
   logger.info("API access ok");
 
-  const credentialsEncrypted = encryptSecret(
-    JSON.stringify({ refreshToken, clientId, clientSecret }),
-  );
+  let credentialsValue: object;
+  if (env.MOS_CREDENTIAL_KEY) {
+    const { encryptSecret } = await import("../src/lib/secrets.js");
+    const encrypted = encryptSecret(JSON.stringify({ refreshToken, clientId, clientSecret }));
+    credentialsValue = { encrypted };
+  } else {
+    credentialsValue = { refreshToken, clientId, clientSecret };
+  }
 
   const icaId = newId("integrationAccount");
   const ica = await prisma.integrationAccount.upsert({
@@ -60,7 +68,7 @@ async function main() {
       },
     },
     update: {
-      credentials: { encrypted: credentialsEncrypted },
+      credentials: credentialsValue,
       status: "ACTIVE",
     },
     create: {
@@ -69,7 +77,7 @@ async function main() {
       channel: "GOOGLE_ADS",
       label: `Google Ads ${customerId}`,
       externalId: customerId,
-      credentials: { encrypted: credentialsEncrypted },
+      credentials: credentialsValue,
       status: "ACTIVE",
     },
   });
