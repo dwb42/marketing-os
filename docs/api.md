@@ -252,6 +252,24 @@ Cross-Entity-Suche über Campaigns, Assets, Clusters, Findings und Learnings. Al
 { "campaigns": [...], "assets": [...], "clusters": [...], "findings": [...], "learnings": [...] }
 ```
 
+## Campaign Sync (Google Ads Push)
+
+### `POST /campaigns/:id/sync`
+Pusht eine APPROVED Campaign inkl. Assets zu Google Ads. Erstellt Campaign, Ad Group, RSA, Keywords und Geo-Targeting.
+Erfordert Rolle `media-buyer` oder `operator`.
+```json
+{ "workspaceId": "wsp_…", "actorId": "act_…" }
+```
+Response:
+```json
+{ "ok": true, "syncRunId": "syn_…", "channelCampaignId": "ccp_…", "externalIds": { "campaignId": "12345", "adGroupId": "67890", "adId": "11111" } }
+```
+Voraussetzungen:
+- Campaign Status = `APPROVED`
+- ChannelConnection für GOOGLE_ADS existiert im Workspace
+- Assets mit APPROVED Versions verknüpft (Headlines, Descriptions, Keywords, Target URL)
+- Google Ads Env-Vars konfiguriert
+
 ## Health & Discovery
 
 - `GET /` — API-Index (Gruppierung aller Routen)

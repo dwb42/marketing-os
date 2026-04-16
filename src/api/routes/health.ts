@@ -29,7 +29,7 @@ const API_INDEX = {
     ],
     annotations: ["POST /annotations", "GET /annotations"],
     reporting: ["GET /performance", "GET /outcomes", "POST /outcomes", "GET /changelog"],
-    sync: ["POST /sync-runs", "GET /sync-runs", "GET /sync-runs/:id"],
+    sync: ["POST /sync-runs", "GET /sync-runs", "GET /sync-runs/:id", "POST /campaigns/:id/sync"],
     clusters: [
       "POST /clusters",
       "GET /clusters",
