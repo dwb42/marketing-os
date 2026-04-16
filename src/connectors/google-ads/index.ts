@@ -12,7 +12,7 @@ import {
 } from "../types.js";
 import { refreshAccessToken, type GoogleAdsTokens } from "./auth.js";
 
-const BASE = "https://googleads.googleapis.com/v18";
+const BASE = "https://googleads.googleapis.com/v23";
 
 function fmtDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -198,8 +198,8 @@ export class GoogleAdsConnector implements ChannelConnector {
             },
             geoTargetTypeSetting: {
               positiveGeoTargetType: "PRESENCE",
-              negativeGeoTargetType: "PRESENCE_OR_INTEREST",
             },
+            containsEuPoliticalAdvertising: "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING",
           },
         },
       ],
@@ -268,7 +268,7 @@ export class GoogleAdsConnector implements ChannelConnector {
       ],
     });
 
-    // F — Keywords (Phrase Match)
+    // F — Keywords (Phrase Match) with health policy exemption
     if (p.keywords.length > 0) {
       await request(`/customers/${customerId}/adGroupCriteria:mutate`, {
         operations: p.keywords.map((kw) => ({
@@ -279,6 +279,9 @@ export class GoogleAdsConnector implements ChannelConnector {
               matchType: "PHRASE",
             },
           },
+          exemptPolicyViolationKeys: [
+            { policyName: "HEALTH_IN_PERSONALIZED_ADS", violatingText: kw },
+          ],
         })),
       });
     }

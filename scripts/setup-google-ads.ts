@@ -36,7 +36,7 @@ async function main() {
     headers["login-customer-id"] = env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
   }
   const testRes = await fetch(
-    `https://googleads.googleapis.com/v18/customers/${customerId}/googleAds:searchStream`,
+    `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:searchStream`,
     {
       method: "POST",
       headers,
