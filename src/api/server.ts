@@ -1,4 +1,5 @@
 import Fastify, { FastifyInstance } from "fastify";
+import cors from "@fastify/cors";
 import { ZodError } from "zod";
 import { loadEnv } from "../config/env.js";
 import { logger } from "../lib/logger.js";
@@ -65,6 +66,16 @@ export async function buildServer(): Promise<FastifyInstance> {
     return reply.status(500).send({
       error: { code: "INTERNAL", message: "Internal server error" },
     });
+  });
+
+  await app.register(cors, {
+    origin: [
+      "https://pflegeberatung.b42.io",
+      "http://localhost:3099",
+      "http://localhost:3000",
+    ],
+    methods: ["GET", "POST", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   });
 
   await registerAuth(app);
