@@ -12,6 +12,8 @@ export type SubjectType =
   | "LEARNING"
   | "APPROVAL"
   | "SYNC_RUN"
+  | "INTENT_CLUSTER"
+  | "FINDING"
   | "PLATFORM"
   | "PROPOSAL";
 

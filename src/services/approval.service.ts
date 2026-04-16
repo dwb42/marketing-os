@@ -10,6 +10,7 @@ export class ApprovalService {
     targetId: string;
     decision: ApprovalDecision;
     comment?: string;
+    payload?: Record<string, unknown>;
     actorId?: string;
   }): Promise<string> {
     const id = newId("approval");
@@ -21,6 +22,7 @@ export class ApprovalService {
         targetId: input.targetId,
         decision: input.decision,
         comment: input.comment ?? null,
+        payload: (input.payload ?? {}) as object,
         actorId: input.actorId ?? null,
       },
     });

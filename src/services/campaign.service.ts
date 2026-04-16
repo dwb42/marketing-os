@@ -1,6 +1,6 @@
 import { prisma } from "./prisma.js";
 import { newId } from "../lib/ids.js";
-import { invalidState, notFound } from "../lib/errors.js";
+import { invalidInput, invalidState, notFound } from "../lib/errors.js";
 import { canTransitionCampaign } from "../domain/policies.js";
 import type { CampaignStatus } from "../domain/status.js";
 import { changeEventService } from "./change-event.service.js";
@@ -58,6 +58,7 @@ export class CampaignService {
   }): Promise<void> {
     const existing = await prisma.campaign.findFirst({
       where: { id: params.campaignId, workspaceId: params.workspaceId },
+      include: { campaignAssets: { include: { asset: { include: { versions: true } } } } },
     });
     if (!existing) throw notFound("Campaign", params.campaignId);
 
@@ -67,6 +68,21 @@ export class CampaignService {
       throw invalidState(`Illegal campaign transition ${from} → ${params.to}`, {
         campaignId: params.campaignId,
       });
+    }
+
+    if (params.to === "IN_REVIEW") {
+      if (!existing.initiativeId) {
+        throw invalidInput("Campaign kann nicht in IN_REVIEW übergehen: initiativeId fehlt");
+      }
+      if (existing.campaignAssets.length === 0) {
+        throw invalidInput("Campaign kann nicht in IN_REVIEW übergehen: keine Assets verknüpft");
+      }
+      const hasNonDraftVersion = existing.campaignAssets.some((ca) =>
+        ca.asset.versions.some((v) => v.status !== "DRAFT"),
+      );
+      if (!hasNonDraftVersion) {
+        throw invalidInput("Campaign kann nicht in IN_REVIEW übergehen: kein Asset hat eine Version mit Status != DRAFT");
+      }
     }
 
     await prisma.campaign.update({

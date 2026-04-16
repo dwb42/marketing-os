@@ -51,8 +51,21 @@ Zwei Modi, abhängig von `MOS_TOKENS`:
 
 ### `POST /initiatives`
 ```json
-{ "workspaceId": "wsp_…", "title": "Pflegegrad-Funnel verbessern", "goal": "Mehr Nutzer zum Pflegegrad-PDF führen" }
+{
+  "workspaceId": "wsp_…",
+  "title": "Pflegegrad-Funnel verbessern",
+  "goal": "Mehr Nutzer zum Pflegegrad-PDF führen",
+  "modules": ["pflegegrad-antrag", "pflegegrad-simulation"],
+  "outcomeLadder": ["chat_gestartet", "consent_erteilt", "antrag_gestellt"],
+  "hypothesis": "Wenn wir …, dann …",
+  "learnQuestions": ["Akzeptieren LP-Besucher den Medienbruch?"],
+  "assumptions": ["Hilfesuche-Modifier selektieren konversionsbereitere Nutzer"],
+  "risks": ["Google Ads Policies im Pflegekontext"],
+  "successCriteria": "Chat-Start >= 5%",
+  "metadata": {}
+}
 ```
+Alle neuen Felder sind optional.
 
 ### `GET /initiatives/:id/timeline?workspaceId=…`
 Liefert einen kombinierten Stream aus ChangeEvents, Annotations, Performance und verknüpften Campaigns/Hypotheses/Learnings.
@@ -182,6 +195,62 @@ Antwort: `{ "id": "syn_…", "reused": false }`. Idempotent über `(workspaceId,
 ```
 
 ### `GET /proposals?workspaceId=…&area=data_model`
+
+## IntentCluster
+
+### `POST /clusters`
+```json
+{ "workspaceId": "wsp_…", "productId": "prd_…", "name": "hilfesuchende-pflegegeld", "modulPrimary": "cross-modul", "initiativeId": "ini_…", "modulSecondary": ["pflegegrad-antrag"], "outcome": "chat_gestartet", "lebenslage": "…", "suchbegriffe": ["Pflegegeld Antrag Hilfe"], "naechsteAktion": "…" }
+```
+
+### `GET /clusters?workspaceId=…&productId=…&status=DRAFT&validation=HYPOTHESIS&initiativeId=…`
+
+### `GET /clusters/:id?workspaceId=…`
+Inkl. verknüpfter Findings.
+
+### `PATCH /clusters/:id?workspaceId=…`
+```json
+{ "lebenslage": "aktualisiert", "suchbegriffe": ["neu1", "neu2"], "actorId": "act_…" }
+```
+
+### `POST /clusters/:id/validate?workspaceId=…`
+```json
+{ "validation": "WEAK_EVIDENCE", "actorId": "act_…" }
+```
+Erlaubte Werte: `HYPOTHESIS`, `WEAK_EVIDENCE`, `EVIDENCED`, `REFUTED`.
+
+## Finding
+
+### `POST /findings`
+```json
+{ "workspaceId": "wsp_…", "beobachtung": "Nutzer brechen nach LP ab", "interpretation": "Medienbruch zu groß", "empfehlung": "Trust-Element hinzufügen", "initiativeId": "ini_…", "clusterId": "clu_…", "modulBetroffen": "landing-page", "konfidenz": "MEDIUM", "empfehlungAn": "copywriter" }
+```
+
+### `GET /findings?workspaceId=…&initiativeId=…&clusterId=…&status=OPEN`
+
+### `GET /findings/:id?workspaceId=…`
+
+### `POST /findings/:id/status?workspaceId=…`
+```json
+{ "status": "ADDRESSED", "actorId": "act_…" }
+```
+Erlaubte Werte: `OPEN`, `ADDRESSED`, `WONT_FIX`, `ARCHIVED`.
+
+## Outcome-Funnel
+
+### `GET /outcomes/funnel?productId=…&from=…&to=…`
+Aggregiert Outcomes nach Typ.
+```json
+{ "funnel": [{ "type": "chat_started", "count": 42 }, { "type": "consent_erteilt", "count": 18 }] }
+```
+
+## Suche
+
+### `GET /search?workspaceId=…&q=Pflegegeld&initiativeId=…&clusterId=…&status=…&from=…&to=…`
+Cross-Entity-Suche über Campaigns, Assets, Clusters, Findings und Learnings. Alle Filter optional.
+```json
+{ "campaigns": [...], "assets": [...], "clusters": [...], "findings": [...], "learnings": [...] }
+```
 
 ## Health & Discovery
 

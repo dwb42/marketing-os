@@ -10,6 +10,18 @@ export async function registerOutcomeRoutes(app: FastifyInstance): Promise<void>
     return { id };
   });
 
+  app.get("/outcomes/funnel", async (req) => {
+    const q = z
+      .object({
+        productId: ProductIdSchema,
+        from: z.coerce.date(),
+        to: z.coerce.date(),
+      })
+      .parse(req.query);
+    const funnel = await outcomeService.funnel(q.productId, q.from, q.to);
+    return { funnel };
+  });
+
   app.get("/outcomes", async (req) => {
     const q = z
       .object({

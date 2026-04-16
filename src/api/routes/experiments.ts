@@ -34,7 +34,7 @@ const CreateLearningSchema = z.object({
   evidence: z
     .array(
       z.object({
-        type: z.enum(["PERFORMANCE_WINDOW", "EXPERIMENT", "OUTCOME_WINDOW", "ANNOTATION", "OTHER"]),
+        type: z.enum(["PERFORMANCE_WINDOW", "EXPERIMENT", "OUTCOME_WINDOW", "ANNOTATION", "FINDING", "OTHER"]),
         ref: z.string(),
         note: z.string().optional(),
       }),

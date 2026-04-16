@@ -43,6 +43,8 @@ model Workspace {
   experiments          Experiment[]
   hypotheses           Hypothesis[]
   audienceSegments     AudienceSegment[]
+  clusters             IntentCluster[]
+  findings             Finding[]
 }
 
 model Brand {
@@ -76,6 +78,7 @@ model Product {
   audienceSegments AudienceSegment[]
   campaigns        Campaign[]
   outcomes         ProductOutcomeEvent[]
+  clusters         IntentCluster[]
 
   @@unique([workspaceId, slug])
   @@index([workspaceId])
@@ -119,20 +122,30 @@ enum ActorType {
 // ────────────────────────────────────────────────────────────────────
 
 model Initiative {
-  id          String           @id
-  workspaceId String
-  title       String
-  goal        String
-  status      InitiativeStatus @default(PROPOSED)
-  startsAt    DateTime?
-  endsAt      DateTime?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id              String           @id
+  workspaceId     String
+  title           String
+  goal            String
+  status          InitiativeStatus @default(PROPOSED)
+  startsAt        DateTime?
+  endsAt          DateTime?
+  modules         String[]         @default([])
+  outcomeLadder   Json             @default("[]")
+  hypothesis      String?
+  learnQuestions  Json             @default("[]")
+  assumptions     Json             @default("[]")
+  risks           Json             @default("[]")
+  successCriteria String?
+  metadata        Json             @default("{}")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
-  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   hypotheses  Hypothesis[]
   campaigns   Campaign[]
   learnings   Learning[]
+  clusters    IntentCluster[]
+  findings    Finding[]
 
   @@index([workspaceId, status])
 }
@@ -373,6 +386,7 @@ model Approval {
   targetId    String
   decision    ApprovalDecision
   comment     String?
+  payload     Json             @default("{}")
   actorId     String?
   createdAt   DateTime         @default(now())
 
@@ -543,4 +557,91 @@ model ProductOutcomeEvent {
 
   @@index([productId, type, occurredAt])
   @@index([productId, occurredAt])
+}
+
+// ────────────────────────────────────────────────────────────────────
+// IntentCluster & Finding
+// ────────────────────────────────────────────────────────────────────
+
+model IntentCluster {
+  id              String            @id
+  workspaceId     String
+  productId       String
+  initiativeId    String?
+  name            String
+  status          ClusterStatus     @default(DRAFT)
+  validation      ClusterValidation @default(HYPOTHESIS)
+  modulPrimary    String
+  modulSecondary  String[]          @default([])
+  outcome         String?
+  lebenslage      String?
+  suchbegriffe    String[]          @default([])
+  naechsteAktion  String?
+  friktionspunkte String[]          @default([])
+  metadata        Json              @default("{}")
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  workspace       Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product         Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  initiative      Initiative?  @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
+  findings        Finding[]
+
+  @@index([workspaceId, status])
+  @@index([productId])
+  @@index([initiativeId])
+}
+
+enum ClusterStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  ARCHIVED
+}
+
+enum ClusterValidation {
+  HYPOTHESIS
+  WEAK_EVIDENCE
+  EVIDENCED
+  REFUTED
+}
+
+model Finding {
+  id                String            @id
+  workspaceId       String
+  initiativeId      String?
+  clusterId         String?
+  modulBetroffen    String?
+  outcomeBetroffen  String?
+  beobachtung       String
+  interpretation    String
+  konfidenz         FindingConfidence @default(LOW)
+  konfidenzGrund    String?
+  empfehlung        String
+  empfehlungAn      String?
+  datenLuecke       String?
+  status            FindingStatus     @default(OPEN)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  workspace         Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  initiative        Initiative?    @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
+  cluster           IntentCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status])
+  @@index([initiativeId])
+  @@index([clusterId])
+}
+
+enum FindingConfidence {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum FindingStatus {
+  OPEN
+  ADDRESSED
+  WONT_FIX
+  ARCHIVED
 }

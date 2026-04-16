@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { prisma } from "./prisma.js";
 import { newId } from "../lib/ids.js";
-import { invalidState, notFound } from "../lib/errors.js";
+import { invalidInput, invalidState, notFound } from "../lib/errors.js";
 import { canTransitionAssetVersion } from "../domain/policies.js";
 import type { AssetVersionStatus } from "../domain/status.js";
 import { changeEventService } from "./change-event.service.js";
@@ -99,6 +99,13 @@ export class AssetService {
       throw invalidState(`Illegal asset version transition ${from} → ${input.to}`, {
         assetVersionId: input.assetVersionId,
       });
+    }
+
+    if (from === "DRAFT" && input.to === "IN_REVIEW") {
+      const content = v.content as Record<string, unknown> | null;
+      if (!content || Object.keys(content).length === 0) {
+        throw invalidInput("AssetVersion kann nicht in IN_REVIEW übergehen: content ist leer");
+      }
     }
     await prisma.assetVersion.update({
       where: { id: input.assetVersionId },

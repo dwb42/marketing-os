@@ -27,6 +27,19 @@ export class OutcomeService {
     return id;
   }
 
+  async funnel(productId: string, from: Date, to: Date) {
+    const rows = await prisma.$queryRaw<{ type: string; count: bigint }[]>`
+      SELECT type, COUNT(*) as count
+      FROM "ProductOutcomeEvent"
+      WHERE "productId" = ${productId}
+        AND "occurredAt" >= ${from}
+        AND "occurredAt" <= ${to}
+      GROUP BY type
+      ORDER BY count DESC
+    `;
+    return rows.map((r) => ({ type: r.type, count: Number(r.count) }));
+  }
+
   async query(params: { productId: string; type?: string; from: Date; to: Date }) {
     return prisma.productOutcomeEvent.findMany({
       where: {

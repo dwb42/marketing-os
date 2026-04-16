@@ -17,6 +17,9 @@ import { registerPerformanceRoutes } from "./routes/performance.js";
 import { registerChangelogRoutes } from "./routes/changelog.js";
 import { registerSyncRunRoutes } from "./routes/sync-runs.js";
 import { registerProposalRoutes } from "./routes/proposals.js";
+import { registerClusterRoutes } from "./routes/clusters.js";
+import { registerFindingRoutes } from "./routes/findings.js";
+import { registerSearchRoutes } from "./routes/search.js";
 
 // JSON-Serializer, der BigInt (Prisma costMicros) als String ausgibt.
 // Ohne das würde Fastify bei BigInt-Feldern werfen.
@@ -79,6 +82,9 @@ export async function buildServer(): Promise<FastifyInstance> {
   await registerChangelogRoutes(app);
   await registerSyncRunRoutes(app);
   await registerProposalRoutes(app);
+  await registerClusterRoutes(app);
+  await registerFindingRoutes(app);
+  await registerSearchRoutes(app);
 
   logger.info({ port: env.PORT }, "server ready");
   return app;

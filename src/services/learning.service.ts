@@ -5,7 +5,7 @@ import { changeEventService } from "./change-event.service.js";
 export type LearningConfidence = "LOW" | "MEDIUM" | "HIGH";
 
 export interface LearningEvidence {
-  type: "PERFORMANCE_WINDOW" | "EXPERIMENT" | "OUTCOME_WINDOW" | "ANNOTATION" | "OTHER";
+  type: "PERFORMANCE_WINDOW" | "EXPERIMENT" | "OUTCOME_WINDOW" | "ANNOTATION" | "FINDING" | "OTHER";
   ref: string;
   note?: string;
 }

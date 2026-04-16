@@ -8,7 +8,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --env-file=.env src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
@@ -16,6 +16,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "seed:pflegemax": "tsx scripts/seed-pflegemax.ts",
+    "seed:welle1": "tsx --env-file=.env scripts/seed-welle1.ts",
     "smoke": "tsx scripts/smoke.ts",
     "test": "node --test --import tsx tests/**/*.test.ts"
   },

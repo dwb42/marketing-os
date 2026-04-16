@@ -12,6 +12,14 @@ export class InitiativeService {
     actorId?: string;
     startsAt?: Date;
     endsAt?: Date;
+    modules?: string[];
+    outcomeLadder?: string[];
+    hypothesis?: string;
+    learnQuestions?: string[];
+    assumptions?: string[];
+    risks?: string[];
+    successCriteria?: string;
+    metadata?: Record<string, unknown>;
   }): Promise<string> {
     const id = newId("initiative");
     await prisma.initiative.create({
@@ -23,6 +31,14 @@ export class InitiativeService {
         status: "PROPOSED",
         startsAt: input.startsAt ?? null,
         endsAt: input.endsAt ?? null,
+        modules: input.modules ?? [],
+        outcomeLadder: (input.outcomeLadder ?? []) as object,
+        hypothesis: input.hypothesis ?? null,
+        learnQuestions: (input.learnQuestions ?? []) as object,
+        assumptions: (input.assumptions ?? []) as object,
+        risks: (input.risks ?? []) as object,
+        successCriteria: input.successCriteria ?? null,
+        metadata: (input.metadata ?? {}) as object,
       },
     });
     await changeEventService.append({

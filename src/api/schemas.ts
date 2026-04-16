@@ -62,6 +62,7 @@ export const CreateApprovalSchema = z.object({
   targetId: z.string(),
   decision: z.enum(["REQUESTED", "APPROVED", "REJECTED", "CHANGES_REQUESTED"]),
   comment: z.string().max(2000).optional(),
+  payload: z.record(z.unknown()).optional(),
   actorId: z.string().optional(),
 });
 
@@ -81,4 +82,12 @@ export const CreateInitiativeSchema = z.object({
   actorId: z.string().optional(),
   startsAt: z.coerce.date().optional(),
   endsAt: z.coerce.date().optional(),
+  modules: z.array(z.string()).optional(),
+  outcomeLadder: z.array(z.string()).optional(),
+  hypothesis: z.string().max(2000).optional(),
+  learnQuestions: z.array(z.string()).optional(),
+  assumptions: z.array(z.string()).optional(),
+  risks: z.array(z.string()).optional(),
+  successCriteria: z.string().max(2000).optional(),
+  metadata: z.record(z.unknown()).optional(),
 });
