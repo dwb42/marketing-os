@@ -1,5 +1,6 @@
 import { prisma } from "./prisma.js";
 import { newId } from "../lib/ids.js";
+import { notFound } from "../lib/errors.js";
 
 type Confidence = "confirmed" | "ambiguous" | "unattributed";
 
@@ -37,6 +38,15 @@ export class AttributionService {
   private readonly clockSkewMs = 30 * 1000;
 
   async match(input: MatchInput): Promise<MatchResult> {
+    // Guard: fail fast with a clean 404 if the product does not exist,
+    // otherwise the AttributionMatch insert below blows up with an FK
+    // violation that surfaces as 500. Better to reject cleanly.
+    const product = await prisma.product.findUnique({
+      where: { id: input.productId },
+      select: { id: true },
+    });
+    if (!product) throw notFound("Product", input.productId);
+
     const messageTime = input.occurredAt.getTime();
     const lo = new Date(messageTime - this.matchWindowMs);
     const hi = new Date(messageTime + this.clockSkewMs);

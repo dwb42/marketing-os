@@ -120,6 +120,22 @@ test("already-matched clicks are excluded from subsequent matches", async () => 
   assert.equal(second.sessionRef, null);
 });
 
+test("rejects with NOT_FOUND when the product does not exist", async () => {
+  await assert.rejects(
+    () =>
+      attributionService.match({
+        productId: newId("product"), // random, not created
+        messageHash: "g".repeat(32),
+        senderHash: "s".repeat(32),
+        occurredAt: new Date("2030-06-01T10:00:00Z"),
+      }),
+    (err: unknown) =>
+      err instanceof Error &&
+      err.name === "DomainError" &&
+      (err as { code: string }).code === "NOT_FOUND",
+  );
+});
+
 test("every call writes an AttributionMatch row (success or miss)", async () => {
   const beforeCount = await prisma.attributionMatch.count({ where: { productId } });
   await attributionService.match({
