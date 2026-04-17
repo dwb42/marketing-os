@@ -36,21 +36,64 @@ function Inner() {
     return <InitiativeDetail initiativeId={selectedId} workspaceId={workspaceId} />;
   }
 
-  return <InitiativesList />;
+  return <InitiativesList workspaceId={workspaceId} />;
 }
 
-function InitiativesList() {
+function InitiativesList({ workspaceId }: { workspaceId: string }) {
+  const q = useQuery({
+    queryKey: ["initiatives", workspaceId],
+    queryFn: () => api.initiatives.list({ workspaceId }),
+    enabled: !!workspaceId,
+  });
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Initiativen"
         description="Strategische Stossrichtungen mit Hypothese, Learn-Questions und Success-Criteria"
       />
-      <EmptyState
-        icon={<Target size={24} />}
-        title="Initiative-Liste noch nicht verfügbar"
-        description="Das Backend hat aktuell nur POST /initiatives und GET /initiatives/:id/timeline. Öffne eine Initiative direkt per ?id=ini_…"
-      />
+
+      {q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : null}
+
+      {q.isLoading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 w-full" />)}
+        </div>
+      ) : (q.data ?? []).length === 0 ? (
+        <EmptyState icon={<Target size={24} />} title="Keine Initiativen" />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {(q.data ?? []).map((ini) => (
+            <Link key={ini.id} href={`/initiatives?id=${ini.id}`}>
+              <Card className="hover:border-primary/40 transition-colors cursor-pointer h-full">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <div className="font-medium text-sm flex-1">{ini.title}</div>
+                    <StatusBadge status={ini.status} />
+                  </div>
+                  <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
+                    {ini.goal}
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap text-[11px] text-muted-foreground">
+                    {ini.modules && ini.modules.length > 0 ? (
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {ini.modules.slice(0, 3).map((m) => (
+                          <span key={m} className="font-mono px-1.5 py-0.5 rounded bg-muted">
+                            {m}
+                          </span>
+                        ))}
+                        {ini.modules.length > 3 ? (
+                          <span>+{ini.modules.length - 3}</span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -68,6 +68,24 @@ export class InitiativeService {
     });
   }
 
+  async list(workspaceId: string, filter: { status?: InitiativeStatus } = {}) {
+    return prisma.initiative.findMany({
+      where: {
+        workspaceId,
+        ...(filter.status ? { status: filter.status } : {}),
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+  }
+
+  async get(workspaceId: string, id: string) {
+    const i = await prisma.initiative.findFirst({
+      where: { id, workspaceId },
+    });
+    if (!i) throw notFound("Initiative", id);
+    return i;
+  }
+
   async timeline(workspaceId: string, id: string) {
     const initiative = await prisma.initiative.findFirst({
       where: { id, workspaceId },

@@ -5,21 +5,25 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/common/status-badge";
 import { RelativeTime } from "@/components/common/relative-time";
-import { AlertTriangle, Lightbulb, CheckCircle2 } from "lucide-react";
-import type { Finding, SyncRun } from "@/lib/types";
+import { IdChip } from "@/components/common/id-chip";
+import { AlertTriangle, Lightbulb, CheckCircle2, CheckSquare } from "lucide-react";
+import type { Finding, SyncRun, Approval } from "@/lib/types";
 
 export function AttentionInboxWidget({
   failedSyncs,
   openFindings,
+  pendingApprovals,
   loading,
 }: {
   failedSyncs: SyncRun[] | undefined;
   openFindings: Finding[] | undefined;
+  pendingApprovals: Approval[] | undefined;
   loading?: boolean;
 }) {
   const failed = failedSyncs ?? [];
   const open = openFindings ?? [];
-  const isEmpty = !loading && failed.length === 0 && open.length === 0;
+  const pending = pendingApprovals ?? [];
+  const isEmpty = !loading && failed.length === 0 && open.length === 0 && pending.length === 0;
 
   return (
     <Card>
@@ -41,12 +45,12 @@ export function AttentionInboxWidget({
             </div>
             <div className="text-sm font-medium">Alles im grünen Bereich.</div>
             <div className="text-xs text-muted-foreground">
-              Keine fehlgeschlagenen Syncs oder offenen Findings.
+              Keine fehlgeschlagenen Syncs, offenen Findings oder offenen Approvals.
             </div>
           </div>
         ) : (
           <ul className="divide-y divide-border">
-            {failed.slice(0, 5).map((s) => (
+            {failed.slice(0, 4).map((s) => (
               <li
                 key={s.id}
                 className="flex items-start gap-3 px-5 py-3 hover:bg-muted/40 transition-colors"
@@ -56,7 +60,12 @@ export function AttentionInboxWidget({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm flex items-center gap-2">
-                    <span className="font-medium">Sync fehlgeschlagen</span>
+                    <Link
+                      href={`/sync-runs?id=${s.id}`}
+                      className="font-medium hover:underline"
+                    >
+                      Sync fehlgeschlagen
+                    </Link>
                     <StatusBadge status={s.status} />
                   </div>
                   <div className="text-[11px] text-muted-foreground font-mono truncate mt-0.5">
@@ -74,7 +83,36 @@ export function AttentionInboxWidget({
                 />
               </li>
             ))}
-            {open.slice(0, 5).map((f) => (
+            {pending.slice(0, 4).map((a) => (
+              <li
+                key={a.id}
+                className="flex items-start gap-3 px-5 py-3 hover:bg-muted/40 transition-colors"
+              >
+                <div className="mt-0.5 size-6 shrink-0 grid place-items-center rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                  <CheckSquare size={12} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm flex items-center gap-2">
+                    <span className="font-medium">Approval offen</span>
+                    <StatusBadge status={a.decision} />
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
+                    <span className="uppercase tracking-wide">{a.targetType}</span>
+                    <IdChip id={a.targetId} />
+                  </div>
+                  {a.comment ? (
+                    <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                      {a.comment}
+                    </div>
+                  ) : null}
+                </div>
+                <RelativeTime
+                  date={a.createdAt}
+                  className="text-[11px] text-muted-foreground shrink-0"
+                />
+              </li>
+            ))}
+            {open.slice(0, 4).map((f) => (
               <li
                 key={f.id}
                 className="flex items-start gap-3 px-5 py-3 hover:bg-muted/40 transition-colors"
@@ -107,7 +145,7 @@ export function AttentionInboxWidget({
         )}
         {!isEmpty && !loading ? (
           <div className="px-5 py-3 border-t border-border flex items-center justify-end gap-4 text-xs">
-            <Link href="/sync-runs" className="text-muted-foreground hover:text-foreground">
+            <Link href="/sync-runs?status=FAILED" className="text-muted-foreground hover:text-foreground">
               Sync-Runs →
             </Link>
             <Link href="/findings" className="text-muted-foreground hover:text-foreground">

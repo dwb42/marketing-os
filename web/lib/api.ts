@@ -118,7 +118,10 @@ export const api = {
   },
 
   initiatives: {
-    // No backend list endpoint yet — derive via /search in caller if needed.
+    list: (params: { workspaceId: string; status?: string }) =>
+      request<Initiative[]>("GET", "/initiatives", { query: params }),
+    get: (id: string, workspaceId: string) =>
+      request<Initiative>("GET", `/initiatives/${id}`, { query: { workspaceId } }),
     timeline: (id: string, workspaceId: string) =>
       request<{
         initiative: Initiative;
@@ -203,7 +206,14 @@ export const api = {
       }),
   },
 
-  // /approvals has no list endpoint yet — intentionally omitted.
+  approvals: {
+    list: (params: {
+      workspaceId: string;
+      targetType?: string;
+      targetId?: string;
+      decision?: string;
+    }) => request<Approval[]>("GET", "/approvals", { query: params }),
+  },
 
   search: (params: {
     workspaceId: string;

@@ -196,3 +196,11 @@ export function useFailedSyncs(workspaceId: string) {
     enabled: !!workspaceId,
   });
 }
+
+export function usePendingApprovals(workspaceId: string) {
+  return useQuery({
+    queryKey: ["approvals", workspaceId, "REQUESTED"],
+    queryFn: () => api.approvals.list({ workspaceId, decision: "REQUESTED" }),
+    enabled: !!workspaceId,
+  });
+}

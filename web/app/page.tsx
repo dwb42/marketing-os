@@ -17,6 +17,7 @@ import {
   useRecentChangelog,
   useOpenFindings,
   useFailedSyncs,
+  usePendingApprovals,
 } from "@/hooks/use-dashboard";
 import { Settings as SettingsIcon } from "lucide-react";
 
@@ -29,6 +30,7 @@ export default function DashboardPage() {
   const changelogQ = useRecentChangelog(workspaceId, 14);
   const findingsQ = useOpenFindings(workspaceId);
   const syncsQ = useFailedSyncs(workspaceId);
+  const approvalsQ = usePendingApprovals(workspaceId);
 
   if (!workspaceId) {
     return (
@@ -93,7 +95,8 @@ export default function DashboardPage() {
         <AttentionInboxWidget
           failedSyncs={syncsQ.data}
           openFindings={findingsQ.data}
-          loading={syncsQ.isLoading || findingsQ.isLoading}
+          pendingApprovals={approvalsQ.data}
+          loading={syncsQ.isLoading || findingsQ.isLoading || approvalsQ.isLoading}
         />
       </div>
     </div>

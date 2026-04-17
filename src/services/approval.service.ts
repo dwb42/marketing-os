@@ -48,6 +48,26 @@ export class ApprovalService {
       orderBy: { createdAt: "asc" },
     });
   }
+
+  async list(
+    workspaceId: string,
+    filter: {
+      targetType?: string;
+      targetId?: string;
+      decision?: ApprovalDecision;
+    } = {},
+  ) {
+    return prisma.approval.findMany({
+      where: {
+        workspaceId,
+        ...(filter.targetType ? { targetType: filter.targetType } : {}),
+        ...(filter.targetId ? { targetId: filter.targetId } : {}),
+        ...(filter.decision ? { decision: filter.decision } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+  }
 }
 
 export const approvalService = new ApprovalService();
