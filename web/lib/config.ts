@@ -9,6 +9,7 @@ const KEYS = {
   token: "mos_token",
   workspaceId: "mos_workspace_id",
   productId: "mos_product_id",
+  actorId: "mos_actor_id",
 } as const;
 
 export function getApiBase(): string {
@@ -53,4 +54,15 @@ export function setProductId(v: string): void {
   if (typeof window === "undefined") return;
   if (v) window.localStorage.setItem(KEYS.productId, v);
   else window.localStorage.removeItem(KEYS.productId);
+}
+
+export function getActorId(): string {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(KEYS.actorId) || "";
+}
+
+export function setActorId(v: string): void {
+  if (typeof window === "undefined") return;
+  if (v) window.localStorage.setItem(KEYS.actorId, v);
+  else window.localStorage.removeItem(KEYS.actorId);
 }

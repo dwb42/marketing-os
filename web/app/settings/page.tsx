@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { IdChip } from "@/components/common/id-chip";
 import { useApiConfig } from "@/hooks/use-api-config";
 import { useSelectedWorkspace, useSelectedProduct } from "@/hooks/use-workspace";
-import { DEFAULT_API_BASE } from "@/lib/config";
+import { DEFAULT_API_BASE, getActorId, setActorId } from "@/lib/config";
 import { Check, AlertTriangle } from "lucide-react";
 import { getApiBase, getToken } from "@/lib/config";
 
@@ -21,16 +21,19 @@ export default function SettingsPage() {
 
   const [draftApiBase, setDraftApiBase] = useState("");
   const [draftToken, setDraftToken] = useState("");
+  const [draftActor, setDraftActor] = useState("");
   const [ping, setPing] = useState<null | "ok" | "fail">(null);
   const [pingDetail, setPingDetail] = useState<string>("");
 
   useEffect(() => {
     setDraftApiBase(apiBase);
     setDraftToken(token);
+    setDraftActor(getActorId());
   }, [apiBase, token]);
 
   const save = () => {
     update({ apiBase: draftApiBase, token: draftToken });
+    setActorId(draftActor);
   };
 
   const testConnection = async () => {
@@ -94,6 +97,22 @@ export default function SettingsPage() {
             <p className="text-[11px] text-muted-foreground">
               Wird als <code className="font-mono">Authorization: Bearer …</code>{" "}
               gesendet. Bei leerem Wert läuft die API im Open-Dev-Modus.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">
+              Actor-ID (optional)
+            </label>
+            <Input
+              value={draftActor}
+              onChange={(e) => setDraftActor(e.target.value)}
+              placeholder="act_…"
+              className="font-mono text-xs"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Wird bei Write-Aktionen (Transitions, Approvals, Sync) als{" "}
+              <code className="font-mono">actorId</code> mitgesendet — landet
+              im Changelog. Leer lassen ist OK.
             </p>
           </div>
           <div className="flex items-center gap-2 pt-2">

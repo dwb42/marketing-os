@@ -13,8 +13,10 @@ import { ErrorState } from "@/components/common/error-state";
 import { IdChip } from "@/components/common/id-chip";
 import { StatusBadge } from "@/components/common/status-badge";
 import { useSelectedWorkspace } from "@/hooks/use-workspace";
+import { useClusterValidate } from "@/hooks/use-mutations";
 import { api } from "@/lib/api";
 import { ArrowLeft, Layers } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function ClustersPage() {
   return (
@@ -123,6 +125,7 @@ function ClusterDetail({ clusterId, workspaceId }: { clusterId: string; workspac
     queryFn: () => api.clusters.get(clusterId, workspaceId),
     enabled: !!workspaceId,
   });
+  const mut = useClusterValidate(workspaceId);
 
   if (q.isLoading) return <Skeleton className="h-64 w-full" />;
   if (q.isError || !q.data) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
@@ -131,16 +134,23 @@ function ClusterDetail({ clusterId, workspaceId }: { clusterId: string; workspac
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/clusters" className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 mb-2">
-          <ArrowLeft size={12} /> Alle Cluster
-        </Link>
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold">{c.name}</h1>
-          <StatusBadge status={c.validation} />
-          <StatusBadge status={c.status} />
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+        <div>
+          <Link href="/clusters" className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 mb-2">
+            <ArrowLeft size={12} /> Alle Cluster
+          </Link>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-xl font-semibold">{c.name}</h1>
+            <StatusBadge status={c.validation} />
+            <StatusBadge status={c.status} />
+          </div>
+          <div className="mt-2"><IdChip id={c.id} /></div>
         </div>
-        <div className="mt-2"><IdChip id={c.id} /></div>
+        <ValidationActions
+          current={c.validation}
+          disabled={mut.isPending}
+          onSet={(v) => mut.mutate({ clusterId, validation: v })}
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -209,6 +219,40 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
     <div className="flex items-start justify-between gap-3">
       <span className="text-muted-foreground text-xs">{label}</span>
       <span className="text-foreground text-right">{value}</span>
+    </div>
+  );
+}
+
+const VALIDATIONS = ["HYPOTHESIS", "WEAK_EVIDENCE", "EVIDENCED", "REFUTED"] as const;
+
+function ValidationActions({
+  current,
+  disabled,
+  onSet,
+}: {
+  current: string;
+  disabled: boolean;
+  onSet: (v: string) => void;
+}) {
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+        Validation setzen
+      </div>
+      <div className="flex items-center gap-1 flex-wrap justify-end">
+        {VALIDATIONS.map((v) => (
+          <Button
+            key={v}
+            variant={v === current ? "secondary" : "outline"}
+            size="sm"
+            disabled={disabled || v === current}
+            onClick={() => onSet(v)}
+            className="text-[11px] uppercase tracking-wide"
+          >
+            {v.replace("_", " ").toLowerCase()}
+          </Button>
+        ))}
+      </div>
     </div>
   );
 }

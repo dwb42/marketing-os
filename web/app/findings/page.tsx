@@ -6,14 +6,15 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
-import { IdChip } from "@/components/common/id-chip";
 import { StatusBadge } from "@/components/common/status-badge";
 import { RelativeTime } from "@/components/common/relative-time";
 import { useSelectedWorkspace } from "@/hooks/use-workspace";
+import { useFindingStatus } from "@/hooks/use-mutations";
 import { api } from "@/lib/api";
-import { Lightbulb } from "lucide-react";
+import { Lightbulb, Check, X, RotateCcw, Archive } from "lucide-react";
 import type { Finding, FindingStatus } from "@/lib/types";
 
 const COLUMNS: Array<{ status: FindingStatus; title: string }> = [
@@ -31,6 +32,8 @@ export default function FindingsPage() {
     queryFn: () => api.findings.list({ workspaceId }),
     enabled: !!workspaceId,
   });
+
+  const mut = useFindingStatus(workspaceId);
 
   if (!workspaceId) return <EmptyState title="Kein Workspace ausgewählt" />;
 
@@ -88,7 +91,16 @@ export default function FindingsPage() {
                       Leer
                     </div>
                   ) : (
-                    items.map((f) => <FindingCard key={f.id} finding={f} />)
+                    items.map((f) => (
+                      <FindingCard
+                        key={f.id}
+                        finding={f}
+                        onSetStatus={(status) =>
+                          mut.mutate({ findingId: f.id, status })
+                        }
+                        busy={mut.isPending}
+                      />
+                    ))
                   )}
                 </div>
               </div>
@@ -100,7 +112,15 @@ export default function FindingsPage() {
   );
 }
 
-function FindingCard({ finding: f }: { finding: Finding }) {
+function FindingCard({
+  finding: f,
+  onSetStatus,
+  busy,
+}: {
+  finding: Finding;
+  onSetStatus: (status: FindingStatus) => void;
+  busy?: boolean;
+}) {
   return (
     <Card>
       <CardContent className="p-4 space-y-2">
@@ -123,7 +143,47 @@ function FindingCard({ finding: f }: { finding: Finding }) {
           {f.empfehlungAn ? <span>→ {f.empfehlungAn}</span> : null}
           <RelativeTime date={f.createdAt} />
         </div>
+        <FindingActions status={f.status} onSetStatus={onSetStatus} busy={busy} />
       </CardContent>
     </Card>
+  );
+}
+
+function FindingActions({
+  status,
+  onSetStatus,
+  busy,
+}: {
+  status: FindingStatus;
+  onSetStatus: (s: FindingStatus) => void;
+  busy?: boolean;
+}) {
+  const next: Array<{ to: FindingStatus; label: string; icon: React.ElementType }> = [];
+  if (status === "OPEN") {
+    next.push({ to: "ADDRESSED", label: "Bearbeitet", icon: Check });
+    next.push({ to: "WONT_FIX", label: "Wont-Fix", icon: X });
+  } else if (status === "ADDRESSED") {
+    next.push({ to: "OPEN", label: "Wieder öffnen", icon: RotateCcw });
+    next.push({ to: "ARCHIVED", label: "Archiv", icon: Archive });
+  } else if (status === "WONT_FIX") {
+    next.push({ to: "OPEN", label: "Wieder öffnen", icon: RotateCcw });
+  }
+  if (next.length === 0) return null;
+  return (
+    <div className="flex items-center gap-1.5 pt-2 border-t border-border -mx-4 px-4">
+      {next.map(({ to, label, icon: Icon }) => (
+        <Button
+          key={to}
+          variant="ghost"
+          size="sm"
+          disabled={busy}
+          onClick={() => onSetStatus(to)}
+          className="text-xs h-7 px-2 text-muted-foreground hover:text-foreground"
+        >
+          <Icon size={12} />
+          {label}
+        </Button>
+      ))}
+    </div>
   );
 }

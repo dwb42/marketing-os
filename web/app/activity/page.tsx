@@ -22,6 +22,8 @@ export default function ActivityPage() {
   const { workspaceId } = useSelectedWorkspace();
   const [days, setDays] = useState(14);
   const [subjectType, setSubjectType] = useState<string>("");
+  const [actorId, setActorFilter] = useState<string>("");
+  const [kind, setKindFilter] = useState<string>("");
 
   const from = isoDate(daysAgo(days));
   const to = isoDate(todayEnd());
@@ -34,11 +36,14 @@ export default function ActivityPage() {
 
   const events = useMemo(() => {
     const raw = q.data ?? [];
-    const filtered = subjectType
-      ? raw.filter((e) => e.subjectType === subjectType)
-      : raw;
+    const filtered = raw.filter((e) => {
+      if (subjectType && e.subjectType !== subjectType) return false;
+      if (actorId && e.actorId !== actorId) return false;
+      if (kind && e.kind !== kind) return false;
+      return true;
+    });
     return filtered.slice().sort((a, b) => b.at.localeCompare(a.at));
-  }, [q.data, subjectType]);
+  }, [q.data, subjectType, actorId, kind]);
 
   const grouped = useMemo(() => {
     const g: Record<string, typeof events> = {};
@@ -55,17 +60,29 @@ export default function ActivityPage() {
     return Array.from(s).sort();
   }, [q.data]);
 
+  const actors = useMemo(() => {
+    const s = new Set<string>();
+    (q.data ?? []).forEach((e) => e.actorId && s.add(e.actorId));
+    return Array.from(s).sort();
+  }, [q.data]);
+
+  const kinds = useMemo(() => {
+    const s = new Set<string>();
+    (q.data ?? []).forEach((e) => s.add(e.kind));
+    return Array.from(s).sort();
+  }, [q.data]);
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Activity"
         description="Alle ChangeEvents im Workspace, gruppiert nach Tag."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Select
               value={String(days)}
               onChange={(e) => setDays(Number(e.target.value))}
-              className="h-8 min-w-[120px] text-xs"
+              className="h-8 min-w-[110px] text-xs"
             >
               <option value="3">3 Tage</option>
               <option value="7">7 Tage</option>
@@ -76,13 +93,31 @@ export default function ActivityPage() {
             <Select
               value={subjectType}
               onChange={(e) => setSubjectType(e.target.value)}
-              className="h-8 min-w-[160px] text-xs"
+              className="h-8 min-w-[150px] text-xs"
             >
               <option value="">Alle Subject-Typen</option>
               {subjectTypes.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </Select>
+            <Select
+              value={actorId}
+              onChange={(e) => setActorFilter(e.target.value)}
+              className="h-8 min-w-[150px] text-xs font-mono"
+            >
+              <option value="">Alle Actors</option>
+              {actors.map((a) => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+            </Select>
+            <Select
+              value={kind}
+              onChange={(e) => setKindFilter(e.target.value)}
+              className="h-8 min-w-[180px] text-xs font-mono"
+            >
+              <option value="">Alle Kinds</option>
+              {kinds.map((k) => (
+                <option key={k} value={k}>{k}</option>
               ))}
             </Select>
           </div>

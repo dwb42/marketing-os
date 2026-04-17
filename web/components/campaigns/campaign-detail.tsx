@@ -15,6 +15,7 @@ import { PerformanceChart } from "@/components/performance/performance-chart";
 import { EmptyState } from "@/components/common/empty-state";
 import { iconForEvent } from "@/components/activity/event-icon";
 import { AssetDiffViewer } from "@/components/assets/asset-diff-viewer";
+import { CampaignActions } from "@/components/campaigns/campaign-actions";
 import { useState } from "react";
 import { formatDate, formatDateTime, daysAgo, todayEnd, isoDate, formatNumber, formatMoneyFromMicros, formatPercent } from "@/lib/format";
 import { api } from "@/lib/api";
@@ -130,7 +131,13 @@ export function CampaignDetail({
               <IdChip id={campaign.id} />
               {campaign.initiativeId ? (
                 <span className="text-muted-foreground">
-                  Initiative <IdChip id={campaign.initiativeId} />
+                  Initiative{" "}
+                  <Link
+                    href={`/initiatives?id=${campaign.initiativeId}`}
+                    className="inline-block align-baseline"
+                  >
+                    <IdChip id={campaign.initiativeId} />
+                  </Link>
                 </span>
               ) : null}
               {campaign.audienceSegmentId ? (
@@ -140,6 +147,7 @@ export function CampaignDetail({
               ) : null}
             </div>
           </div>
+          <CampaignActions campaign={campaign} workspaceId={workspaceId} />
         </div>
       </div>
 

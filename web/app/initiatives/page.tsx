@@ -11,8 +11,8 @@ import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { IdChip } from "@/components/common/id-chip";
 import { StatusBadge } from "@/components/common/status-badge";
-import { RelativeTime } from "@/components/common/relative-time";
-import { iconForEvent } from "@/components/activity/event-icon";
+import { InitiativeTimeline } from "@/components/initiative/initiative-timeline";
+import { InitiativePerformance } from "@/components/initiative/initiative-performance";
 import { useSelectedWorkspace } from "@/hooks/use-workspace";
 import { api } from "@/lib/api";
 import { ArrowLeft, Target } from "lucide-react";
@@ -118,7 +118,7 @@ function InitiativeDetail({ initiativeId, workspaceId }: { initiativeId: string;
     return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
   }
 
-  const { initiative, campaigns, events, learnings } = q.data;
+  const { initiative, campaigns, events, annotations, performance, learnings } = q.data;
 
   return (
     <div className="space-y-6">
@@ -136,6 +136,8 @@ function InitiativeDetail({ initiativeId, workspaceId }: { initiativeId: string;
         </div>
       </div>
 
+      <InitiativePerformance rows={performance} />
+
       {initiative.hypothesis ? (
         <Card>
           <CardHeader>
@@ -147,7 +149,7 @@ function InitiativeDetail({ initiativeId, workspaceId }: { initiativeId: string;
 
       <Card>
         <CardHeader>
-          <CardTitle>Verknüpfte Kampagnen</CardTitle>
+          <CardTitle>Verknüpfte Kampagnen · {campaigns.length}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {campaigns.length === 0 ? (
@@ -170,40 +172,15 @@ function InitiativeDetail({ initiativeId, workspaceId }: { initiativeId: string;
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Timeline</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {events.length === 0 ? (
-            <div className="p-5"><EmptyState title="Noch keine Events" /></div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {events.slice().reverse().map((e) => {
-                const { icon: Icon, tone } = iconForEvent(e.kind);
-                return (
-                  <li key={e.id} className="flex items-start gap-3 px-5 py-3">
-                    <div className={`mt-0.5 size-6 shrink-0 grid place-items-center rounded-md ${tone}`}>
-                      <Icon size={12} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm">{e.summary}</div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5">
-                        <RelativeTime date={e.at} /> · <span className="font-mono">{e.kind}</span>
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <div>
+        <h2 className="text-sm font-semibold mb-3">Timeline</h2>
+        <InitiativeTimeline events={events} annotations={annotations} />
+      </div>
 
       {learnings.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Learnings</CardTitle>
+            <CardTitle>Learnings · {learnings.length}</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <ul className="divide-y divide-border">

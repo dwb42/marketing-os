@@ -144,6 +144,11 @@ export const api = {
     }) => request<IntentCluster[]>("GET", "/clusters", { query: params }),
     get: (id: string, workspaceId: string) =>
       request<IntentCluster>("GET", `/clusters/${id}`, { query: { workspaceId } }),
+    validate: (id: string, workspaceId: string, body: { validation: string; actorId?: string }) =>
+      request<{ ok: true }>("POST", `/clusters/${id}/validate`, {
+        query: { workspaceId },
+        body,
+      }),
   },
 
   findings: {
@@ -155,6 +160,11 @@ export const api = {
     }) => request<Finding[]>("GET", "/findings", { query: params }),
     get: (id: string, workspaceId: string) =>
       request<Finding>("GET", `/findings/${id}`, { query: { workspaceId } }),
+    setStatus: (id: string, workspaceId: string, body: { status: string; actorId?: string }) =>
+      request<{ ok: true }>("POST", `/findings/${id}/status`, {
+        query: { workspaceId },
+        body,
+      }),
   },
 
   assets: {
@@ -220,6 +230,25 @@ export const api = {
       targetId?: string;
       decision?: string;
     }) => request<Approval[]>("GET", "/approvals", { query: params }),
+    record: (body: {
+      workspaceId: string;
+      targetType: string;
+      targetId: string;
+      decision: string;
+      comment?: string;
+      payload?: Record<string, unknown>;
+      actorId?: string;
+    }) => request<{ id: string }>("POST", "/approvals", { body }),
+  },
+
+  sync: {
+    triggerCampaign: (campaignId: string, body: { workspaceId: string; actorId?: string }) =>
+      request<{
+        ok: true;
+        syncRunId: string;
+        channelCampaignId: string;
+        externalIds: Record<string, string>;
+      }>("POST", `/campaigns/${campaignId}/sync`, { body }),
   },
 
   search: (params: {
