@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { useSelectedWorkspace } from "@/hooks/use-workspace";
 import { useCmdk } from "@/components/cmd-k/context";
+import { AttentionIndicator } from "@/components/layout/attention-indicator";
 
 export function Topbar() {
   const { theme, setTheme } = useTheme();
@@ -57,6 +58,8 @@ export function Topbar() {
         >
           <Search size={16} />
         </Button>
+
+        <AttentionIndicator />
 
         <Button
           variant="ghost"

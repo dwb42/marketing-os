@@ -92,6 +92,24 @@ export async function registerExperimentRoutes(app: FastifyInstance): Promise<vo
     return experimentService.get(q.workspaceId, p.id);
   });
 
+  app.get("/experiments", async (req) => {
+    const q = z
+      .object({
+        workspaceId: WorkspaceIdSchema,
+        status: z
+          .enum(["DESIGN", "RUNNING", "ANALYZING", "CONCLUDED", "ABORTED"])
+          .optional(),
+        hypothesisId: z.string().startsWith("hyp_").optional(),
+        initiativeId: z.string().startsWith("ini_").optional(),
+      })
+      .parse(req.query);
+    return experimentService.list(q.workspaceId, {
+      ...(q.status ? { status: q.status } : {}),
+      ...(q.hypothesisId ? { hypothesisId: q.hypothesisId } : {}),
+      ...(q.initiativeId ? { initiativeId: q.initiativeId } : {}),
+    });
+  });
+
   app.post("/learnings", async (req) => {
     const body = CreateLearningSchema.parse(req.body);
     const id = await learningService.create(body);

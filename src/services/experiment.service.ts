@@ -90,6 +90,27 @@ export class ExperimentService {
     if (!e) throw notFound("Experiment", id);
     return e;
   }
+
+  async list(
+    workspaceId: string,
+    filter: {
+      status?: ExperimentStatus;
+      hypothesisId?: string;
+      initiativeId?: string;
+    } = {},
+  ) {
+    return prisma.experiment.findMany({
+      where: {
+        workspaceId,
+        ...(filter.status ? { status: filter.status } : {}),
+        ...(filter.hypothesisId ? { hypothesisId: filter.hypothesisId } : {}),
+        ...(filter.initiativeId
+          ? { hypothesis: { initiativeId: filter.initiativeId } }
+          : {}),
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+  }
 }
 
 export const experimentService = new ExperimentService();

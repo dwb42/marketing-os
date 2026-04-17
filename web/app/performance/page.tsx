@@ -28,8 +28,8 @@ export default function PerformancePage() {
     return <EmptyState title="Kein Workspace ausgewählt" />;
   }
 
-  // Combine all perf rows for global chart (padding with zeros for missing days).
-  const allRows = dash.series.map((s) => ({
+  // Synthesize PerformanceRow-shape from pre-aggregated daily series for chart.
+  const toRow = (s: { date: string; impressions: number; clicks: number; costMicros: number }) => ({
     id: s.date,
     channelCampaignId: "agg",
     date: s.date,
@@ -41,7 +41,9 @@ export default function PerformancePage() {
     raw: {},
     pulledAt: s.date,
     syncRunId: null,
-  }));
+  });
+  const allRows = dash.series.map(toRow);
+  const prevAllRows = compare ? dash.prevSeries.map(toRow) : undefined;
 
   // Delta helpers
   const delta = (curr: number, prev: number): { pct: number | null; dir: 1 | -1 | 0 } => {
@@ -145,7 +147,7 @@ export default function PerformancePage() {
               description="Sobald ein Sync-Pull läuft, werden hier Impressionen/Klicks/Spend angezeigt."
             />
           ) : (
-            <PerformanceChart rows={allRows} />
+            <PerformanceChart rows={allRows} prevRows={prevAllRows} />
           )}
         </CardContent>
       </Card>

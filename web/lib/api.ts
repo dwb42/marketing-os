@@ -17,6 +17,8 @@ import type {
   Asset,
   AssetVersion,
   Approval,
+  Hypothesis,
+  Experiment,
 } from "./types";
 
 export class ApiError extends Error {
@@ -126,7 +128,7 @@ export const api = {
       request<{
         initiative: Initiative;
         campaigns: Campaign[];
-        hypotheses: unknown[];
+        hypotheses: Hypothesis[];
         learnings: Learning[];
         events: ChangeEvent[];
         annotations: Annotation[];
@@ -149,6 +151,28 @@ export const api = {
         query: { workspaceId },
         body,
       }),
+  },
+
+  hypotheses: {
+    list: (params: { workspaceId: string; initiativeId?: string }) =>
+      request<Hypothesis[]>("GET", "/hypotheses", { query: params }),
+  },
+
+  experiments: {
+    list: (params: {
+      workspaceId: string;
+      status?: string;
+      hypothesisId?: string;
+      initiativeId?: string;
+    }) => request<Experiment[]>("GET", "/experiments", { query: params }),
+    get: (id: string, workspaceId: string) =>
+      request<Experiment>("GET", `/experiments/${id}`, { query: { workspaceId } }),
+    start: (id: string, body: { workspaceId: string; actorId?: string }) =>
+      request<{ ok: true }>("POST", `/experiments/${id}/start`, { body }),
+    conclude: (
+      id: string,
+      body: { workspaceId: string; conclusion: string; actorId?: string },
+    ) => request<{ ok: true }>("POST", `/experiments/${id}/conclude`, { body }),
   },
 
   findings: {

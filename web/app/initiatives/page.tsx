@@ -13,10 +13,11 @@ import { IdChip } from "@/components/common/id-chip";
 import { StatusBadge } from "@/components/common/status-badge";
 import { InitiativeTimeline } from "@/components/initiative/initiative-timeline";
 import { InitiativePerformance } from "@/components/initiative/initiative-performance";
+import { ExperimentsSection } from "@/components/initiative/experiments-section";
 import { AddAnnotationButton } from "@/components/annotations/add-annotation-button";
 import { useSelectedWorkspace } from "@/hooks/use-workspace";
 import { api } from "@/lib/api";
-import { ArrowLeft, Target } from "lucide-react";
+import { ArrowLeft, Target, FlaskConical } from "lucide-react";
 
 export default function InitiativesPage() {
   return (
@@ -119,7 +120,7 @@ function InitiativeDetail({ initiativeId, workspaceId }: { initiativeId: string;
     return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
   }
 
-  const { initiative, campaigns, events, annotations, performance, learnings } = q.data;
+  const { initiative, campaigns, events, annotations, performance, learnings, hypotheses } = q.data;
 
   return (
     <div className="space-y-6">
@@ -142,11 +143,36 @@ function InitiativeDetail({ initiativeId, workspaceId }: { initiativeId: string;
       {initiative.hypothesis ? (
         <Card>
           <CardHeader>
-            <CardTitle>Hypothese</CardTitle>
+            <CardTitle>Leit-Hypothese</CardTitle>
           </CardHeader>
           <CardContent className="text-sm">{initiative.hypothesis}</CardContent>
         </Card>
       ) : null}
+
+      {hypotheses.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Hypothesen · {hypotheses.length}</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ul className="divide-y divide-border">
+              {hypotheses.map((h) => (
+                <li key={h.id} className="px-5 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm font-medium flex-1">{h.statement}</div>
+                    <IdChip id={h.id} />
+                  </div>
+                  {h.rationale ? (
+                    <div className="text-xs text-muted-foreground mt-1">{h.rationale}</div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <ExperimentsSection initiativeId={initiative.id} workspaceId={workspaceId} />
 
       <Card>
         <CardHeader>

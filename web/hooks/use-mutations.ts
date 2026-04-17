@@ -107,6 +107,45 @@ export function useClusterValidate(workspaceId: string) {
   });
 }
 
+export function useExperimentStart(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ experimentId }: { experimentId: string }) =>
+      api.experiments.start(experimentId, {
+        workspaceId,
+        ...(getActorId() ? { actorId: getActorId() } : {}),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["experiments"] });
+      qc.invalidateQueries({ queryKey: ["initiative-timeline"] });
+      qc.invalidateQueries({ queryKey: ["changelog"] });
+    },
+  });
+}
+
+export function useExperimentConclude(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      experimentId,
+      conclusion,
+    }: {
+      experimentId: string;
+      conclusion: string;
+    }) =>
+      api.experiments.conclude(experimentId, {
+        workspaceId,
+        conclusion,
+        ...(getActorId() ? { actorId: getActorId() } : {}),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["experiments"] });
+      qc.invalidateQueries({ queryKey: ["initiative-timeline"] });
+      qc.invalidateQueries({ queryKey: ["changelog"] });
+    },
+  });
+}
+
 export function useCreateAnnotation(workspaceId: string) {
   const qc = useQueryClient();
   return useMutation({

@@ -282,6 +282,37 @@ export interface FunnelResponse {
   funnel: Array<{ type: string; count: number }>;
 }
 
+export type ExperimentStatus =
+  | "DESIGN"
+  | "RUNNING"
+  | "ANALYZING"
+  | "CONCLUDED"
+  | "ABORTED";
+
+export interface Hypothesis {
+  id: string;
+  workspaceId: string;
+  initiativeId: string | null;
+  statement: string;
+  rationale: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Experiment {
+  id: string;
+  workspaceId: string;
+  hypothesisId: string | null;
+  title: string;
+  description: string | null;
+  status: ExperimentStatus;
+  startedAt: string | null;
+  endedAt: string | null;
+  conclusion: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Learning {
   id: string;
   workspaceId: string;
