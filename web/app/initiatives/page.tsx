@@ -13,6 +13,7 @@ import { IdChip } from "@/components/common/id-chip";
 import { StatusBadge } from "@/components/common/status-badge";
 import { InitiativeTimeline } from "@/components/initiative/initiative-timeline";
 import { InitiativePerformance } from "@/components/initiative/initiative-performance";
+import { AddAnnotationButton } from "@/components/annotations/add-annotation-button";
 import { useSelectedWorkspace } from "@/hooks/use-workspace";
 import { api } from "@/lib/api";
 import { ArrowLeft, Target } from "lucide-react";
@@ -173,7 +174,14 @@ function InitiativeDetail({ initiativeId, workspaceId }: { initiativeId: string;
       </Card>
 
       <div>
-        <h2 className="text-sm font-semibold mb-3">Timeline</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold">Timeline</h2>
+          <AddAnnotationButton
+            workspaceId={workspaceId}
+            subjectType="INITIATIVE"
+            subjectId={initiative.id}
+          />
+        </div>
         <InitiativeTimeline events={events} annotations={annotations} />
       </div>
 

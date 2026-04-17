@@ -221,6 +221,15 @@ export const api = {
       request<Annotation[]>("GET", "/annotations", {
         query: { workspaceId, subjectType, subjectId },
       }),
+    create: (body: {
+      workspaceId: string;
+      subjectType: string;
+      subjectId: string;
+      body: string;
+      occurredAt: string;
+      pinned?: boolean;
+      actorId?: string;
+    }) => request<{ id: string }>("POST", "/annotations", { body }),
   },
 
   approvals: {

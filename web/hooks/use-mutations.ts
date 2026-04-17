@@ -106,3 +106,27 @@ export function useClusterValidate(workspaceId: string) {
     },
   });
 }
+
+export function useCreateAnnotation(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      subjectType: string;
+      subjectId: string;
+      body: string;
+      occurredAt: string;
+      pinned?: boolean;
+    }) =>
+      api.annotations.create({
+        workspaceId,
+        ...body,
+        ...(getActorId() ? { actorId: getActorId() } : {}),
+      }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({
+        queryKey: ["annotations", vars.subjectType, vars.subjectId, workspaceId],
+      });
+      qc.invalidateQueries({ queryKey: ["initiative-timeline"] });
+    },
+  });
+}

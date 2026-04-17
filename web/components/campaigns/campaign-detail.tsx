@@ -16,11 +16,14 @@ import { EmptyState } from "@/components/common/empty-state";
 import { iconForEvent } from "@/components/activity/event-icon";
 import { AssetDiffViewer } from "@/components/assets/asset-diff-viewer";
 import { CampaignActions } from "@/components/campaigns/campaign-actions";
+import { CampaignReviewPanel } from "@/components/campaigns/campaign-review-panel";
+import { AddAnnotationButton } from "@/components/annotations/add-annotation-button";
+import { AnnotationRow, EventRow } from "@/components/activity/timeline-rows";
 import { useState } from "react";
 import { formatDate, formatDateTime, daysAgo, todayEnd, isoDate, formatNumber, formatMoneyFromMicros, formatPercent } from "@/lib/format";
 import { api } from "@/lib/api";
-import type { AssetVersion, Campaign } from "@/lib/types";
-import { ArrowLeft, FileDiff } from "lucide-react";
+import type { AssetVersion, Campaign, ChangeEvent as ChangeEventType, Annotation as AnnotationType } from "@/lib/types";
+import { ArrowLeft, FileDiff, MessageSquare } from "lucide-react";
 
 export function CampaignDetail({
   campaignId,
@@ -72,6 +75,19 @@ export function CampaignDetail({
       queryFn: () => api.assets.versions(assetId, workspaceId),
       enabled: !!workspaceId,
     })),
+  });
+
+  const annotationsQ = useQuery({
+    queryKey: ["annotations", "CAMPAIGN", campaignId, workspaceId],
+    queryFn: () => api.annotations.listForSubject(workspaceId, "CAMPAIGN", campaignId),
+    enabled: !!workspaceId,
+  });
+
+  const approvalsQ = useQuery({
+    queryKey: ["approvals", "CAMPAIGN", campaignId, workspaceId],
+    queryFn: () =>
+      api.approvals.list({ workspaceId, targetType: "CAMPAIGN", targetId: campaignId }),
+    enabled: !!workspaceId,
   });
 
   const [diffAsset, setDiffAsset] = useState<{ id: string; name: string } | null>(null);
@@ -151,6 +167,8 @@ export function CampaignDetail({
         </div>
       </div>
 
+      <CampaignReviewPanel campaign={campaign} workspaceId={workspaceId} />
+
       {/* Quick-Facts KPI row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="p-4">
@@ -182,6 +200,9 @@ export function CampaignDetail({
           <TabsTrigger value="overview">Übersicht</TabsTrigger>
           <TabsTrigger value="performance">Performance</TabsTrigger>
           <TabsTrigger value="assets">Assets</TabsTrigger>
+          <TabsTrigger value="approvals">
+            Approvals{(approvalsQ.data?.length ?? 0) > 0 ? ` · ${approvalsQ.data?.length}` : ""}
+          </TabsTrigger>
           <TabsTrigger value="syncs">Sync-History</TabsTrigger>
           <TabsTrigger value="changelog">Changelog</TabsTrigger>
         </TabsList>
@@ -317,6 +338,50 @@ export function CampaignDetail({
           ) : null}
         </TabsContent>
 
+        <TabsContent value="approvals">
+          <Card>
+            <CardContent className="p-0">
+              {approvalsQ.isLoading ? (
+                <div className="p-5 space-y-2">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-10 w-full" />
+                  ))}
+                </div>
+              ) : (approvalsQ.data ?? []).length === 0 ? (
+                <div className="p-5">
+                  <EmptyState title="Noch keine Approvals" description="Sobald ein Reviewer entscheidet, taucht die Entscheidung hier auf." />
+                </div>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {(approvalsQ.data ?? []).map((a) => (
+                    <li key={a.id} className="flex items-start gap-3 px-5 py-3">
+                      <div className="mt-0.5 size-6 shrink-0 grid place-items-center rounded-md bg-muted">
+                        <StatusBadge status={a.decision} className="text-[9px] px-1 py-0" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 justify-between">
+                          <div className="text-sm font-medium">{a.decision}</div>
+                          <RelativeTime date={a.createdAt} className="text-[11px] text-muted-foreground" />
+                        </div>
+                        {a.comment ? (
+                          <div className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap">
+                            {a.comment}
+                          </div>
+                        ) : null}
+                        {a.actorId ? (
+                          <div className="text-[11px] text-muted-foreground mt-1">
+                            <IdChip id={a.actorId} />
+                          </div>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="syncs">
           <Card>
             <CardContent className="p-0">
@@ -363,41 +428,37 @@ export function CampaignDetail({
         </TabsContent>
 
         <TabsContent value="changelog">
+          <div className="flex justify-end mb-3">
+            <AddAnnotationButton
+              workspaceId={workspaceId}
+              subjectType="CAMPAIGN"
+              subjectId={campaignId}
+            />
+          </div>
           <Card>
             <CardContent className="p-0">
-              {changelogQ.isLoading ? (
+              {changelogQ.isLoading || annotationsQ.isLoading ? (
                 <div className="p-5 space-y-2">
                   {[1, 2, 3].map((i) => (
                     <Skeleton key={i} className="h-10 w-full" />
                   ))}
                 </div>
-              ) : (changelogQ.data ?? []).length === 0 ? (
+              ) : (changelogQ.data ?? []).length === 0 && (annotationsQ.data ?? []).length === 0 ? (
                 <div className="p-5">
                   <EmptyState title="Keine Events" />
                 </div>
               ) : (
                 <ul className="divide-y divide-border">
-                  {(changelogQ.data ?? [])
-                    .slice()
-                    .sort((a, b) => b.at.localeCompare(a.at))
-                    .map((e) => {
-                      const { icon: Icon, tone } = iconForEvent(e.kind);
-                      return (
-                        <li key={e.id} className="flex items-start gap-3 px-5 py-3">
-                          <div className={`mt-0.5 size-6 shrink-0 grid place-items-center rounded-md ${tone}`}>
-                            <Icon size={12} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm">{e.summary}</div>
-                            <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2">
-                              <RelativeTime date={e.at} />
-                              <span className="opacity-40">·</span>
-                              <span className="font-mono">{e.kind}</span>
-                            </div>
-                          </div>
-                        </li>
-                      );
-                    })}
+                  {mergeEventsAndAnnotations(
+                    changelogQ.data ?? [],
+                    annotationsQ.data ?? [],
+                  ).map((n) =>
+                    n.kind === "event" ? (
+                      <EventRow key={n.event.id} event={n.event} />
+                    ) : (
+                      <AnnotationRow key={n.annotation.id} annotation={n.annotation} />
+                    ),
+                  )}
                 </ul>
               )}
             </CardContent>
@@ -406,6 +467,22 @@ export function CampaignDetail({
       </Tabs>
     </div>
   );
+}
+
+type MergedNode =
+  | { kind: "event"; at: string; event: ChangeEventType }
+  | { kind: "annotation"; at: string; annotation: AnnotationType };
+
+function mergeEventsAndAnnotations(
+  events: ChangeEventType[],
+  annotations: AnnotationType[],
+): MergedNode[] {
+  const xs: MergedNode[] = [];
+  for (const e of events) xs.push({ kind: "event", at: e.at, event: e });
+  for (const a of annotations)
+    xs.push({ kind: "annotation", at: a.occurredAt, annotation: a });
+  xs.sort((x, y) => y.at.localeCompare(x.at));
+  return xs;
 }
 
 function Fact({ label, value }: { label: string; value: React.ReactNode }) {
