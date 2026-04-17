@@ -9,14 +9,20 @@ import type { Campaign, PerformanceRow, ChannelCampaign } from "@/lib/types";
  * Dashboard data aggregator.
  * Fetches campaigns → details → performance rows for every synced
  * channel-campaign in the window, then rolls up totals + per-day series.
+ *
+ * When `compare` is true, also fetches the immediately-preceding window of
+ * the same length ("Vorperiode") and exposes it as `prevTotals` / `prevSeries`.
  */
 export function useDashboardData(
   workspaceId: string,
   productId: string | null,
   days = 14,
+  compare = false,
 ) {
   const from = isoDate(daysAgo(days));
   const to = isoDate(todayEnd());
+  const prevFrom = isoDate(daysAgo(days * 2));
+  const prevTo = isoDate(daysAgo(days + 1));
 
   const campaignsQ = useQuery<Campaign[]>({
     queryKey: ["campaigns", workspaceId],
@@ -59,8 +65,27 @@ export function useDashboardData(
     })),
   });
 
+  const prevPerfQueries = useQueries({
+    queries: compare
+      ? channelCampaigns.map((cc) => ({
+          queryKey: ["performance", cc.id, prevFrom, prevTo],
+          queryFn: () =>
+            api.performance.query({
+              channelCampaignId: cc.id,
+              from: prevFrom,
+              to: prevTo,
+            }),
+          enabled: !!cc.id,
+          staleTime: 30_000,
+        }))
+      : [],
+  });
+
   const allRows: PerformanceRow[] = [];
   for (const q of perfQueries) if (q.data) allRows.push(...q.data);
+
+  const prevRows: PerformanceRow[] = [];
+  for (const q of prevPerfQueries) if (q.data) prevRows.push(...q.data);
 
   // Totals over window
   const totals = {
@@ -93,6 +118,30 @@ export function useDashboardData(
     daily.set(key, b);
   }
   const series = Array.from(daily.values()).sort((a, b) =>
+    a.date.localeCompare(b.date),
+  );
+
+  // Previous-period totals + normalized series (re-indexed so day 0 aligns).
+  const prevTotals = { impressions: 0, clicks: 0, costMicros: 0, conversions: 0 };
+  const prevDaily = new Map<string, DayBucket>();
+  for (const r of prevRows) {
+    prevTotals.impressions += r.impressions;
+    prevTotals.clicks += r.clicks;
+    prevTotals.costMicros += Number(r.costMicros);
+    prevTotals.conversions += Number(r.conversions);
+    const key = r.date.slice(0, 10);
+    const b = prevDaily.get(key) ?? {
+      date: key,
+      impressions: 0,
+      clicks: 0,
+      costMicros: 0,
+    };
+    b.impressions += r.impressions;
+    b.clicks += r.clicks;
+    b.costMicros += Number(r.costMicros);
+    prevDaily.set(key, b);
+  }
+  const prevSeries = Array.from(prevDaily.values()).sort((a, b) =>
     a.date.localeCompare(b.date),
   );
 
@@ -149,17 +198,22 @@ export function useDashboardData(
   return {
     from,
     to,
+    prevFrom,
+    prevTo,
     campaigns,
     materializedCampaigns,
     channelCampaigns,
     totals,
     series,
+    prevTotals,
+    prevSeries,
     ccpTotals: Array.from(ccpTotals.values()),
     isLoading,
     isError,
     error,
   };
 }
+
 
 export function useOutcomeFunnel(productId: string, days = 14) {
   const from = isoDate(daysAgo(days));

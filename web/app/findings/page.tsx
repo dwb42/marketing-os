@@ -16,6 +16,7 @@ import { useFindingStatus } from "@/hooks/use-mutations";
 import { api } from "@/lib/api";
 import { Lightbulb, Check, X, RotateCcw, Archive } from "lucide-react";
 import type { Finding, FindingStatus } from "@/lib/types";
+import { ExportCsvButton } from "@/components/common/export-button";
 
 const COLUMNS: Array<{ status: FindingStatus; title: string }> = [
   { status: "OPEN", title: "Offen" },
@@ -47,16 +48,35 @@ export default function FindingsPage() {
         title="Findings"
         description="Was der Agent beobachtet hat, interpretiert und empfiehlt"
         actions={
-          <Select
-            value={confidenceFilter}
-            onChange={(e) => setConfidenceFilter(e.target.value)}
-            className="h-8 min-w-[160px] text-xs"
-          >
-            <option value="">Alle Konfidenzen</option>
-            <option value="HIGH">HIGH</option>
-            <option value="MEDIUM">MEDIUM</option>
-            <option value="LOW">LOW</option>
-          </Select>
+          <div className="flex items-center gap-2">
+            <Select
+              value={confidenceFilter}
+              onChange={(e) => setConfidenceFilter(e.target.value)}
+              className="h-8 min-w-[160px] text-xs"
+            >
+              <option value="">Alle Konfidenzen</option>
+              <option value="HIGH">HIGH</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="LOW">LOW</option>
+            </Select>
+            <ExportCsvButton
+              rows={filtered}
+              filenamePrefix="findings"
+              columns={[
+                { header: "CreatedAt", value: (r) => r.createdAt },
+                { header: "Status", value: (r) => r.status },
+                { header: "Konfidenz", value: (r) => r.konfidenz },
+                { header: "Beobachtung", value: (r) => r.beobachtung },
+                { header: "Interpretation", value: (r) => r.interpretation },
+                { header: "Empfehlung", value: (r) => r.empfehlung },
+                { header: "ModulBetroffen", value: (r) => r.modulBetroffen ?? "" },
+                { header: "OutcomeBetroffen", value: (r) => r.outcomeBetroffen ?? "" },
+                { header: "EmpfehlungAn", value: (r) => r.empfehlungAn ?? "" },
+                { header: "InitiativeId", value: (r) => r.initiativeId ?? "" },
+                { header: "ClusterId", value: (r) => r.clusterId ?? "" },
+              ]}
+            />
+          </div>
         }
       />
 

@@ -17,6 +17,7 @@ import { useSelectedWorkspace } from "@/hooks/use-workspace";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { ArrowLeft, RefreshCw } from "lucide-react";
+import { ExportCsvButton } from "@/components/common/export-button";
 
 export default function SyncRunsPage() {
   return (
@@ -71,6 +72,24 @@ function SyncRunsList({ workspaceId }: { workspaceId: string }) {
               <option value="GOOGLE_ADS">GOOGLE_ADS</option>
               <option value="META_ADS">META_ADS</option>
             </Select>
+            <ExportCsvButton
+              rows={q.data ?? []}
+              filenamePrefix="sync-runs"
+              columns={[
+                { header: "CreatedAt", value: (r) => r.createdAt },
+                { header: "Type", value: (r) => r.type },
+                { header: "Channel", value: (r) => r.channel },
+                { header: "Status", value: (r) => r.status },
+                { header: "TargetType", value: (r) => r.targetType },
+                { header: "TargetId", value: (r) => r.targetId },
+                { header: "IdempotencyKey", value: (r) => r.idempotencyKey },
+                { header: "Attempt", value: (r) => r.attempt },
+                { header: "StartedAt", value: (r) => r.startedAt ?? "" },
+                { header: "FinishedAt", value: (r) => r.finishedAt ?? "" },
+                { header: "ErrorKind", value: (r) => r.errorKind ?? "" },
+                { header: "ErrorMessage", value: (r) => r.errorMessage ?? "" },
+              ]}
+            />
           </div>
         }
       />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,19 +11,30 @@ import { ErrorState } from "@/components/common/error-state";
 import { RelativeTime } from "@/components/common/relative-time";
 import { IdChip } from "@/components/common/id-chip";
 import { iconForEvent } from "@/components/activity/event-icon";
+import { ExportCsvButton } from "@/components/common/export-button";
 import { useSelectedWorkspace } from "@/hooks/use-workspace";
+import { useSearchParamState } from "@/hooks/use-search-param-state";
 import { api } from "@/lib/api";
-import { daysAgo, todayEnd, isoDate, formatDate } from "@/lib/format";
+import { daysAgo, todayEnd, isoDate } from "@/lib/format";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import { Activity as ActivityIcon } from "lucide-react";
 
 export default function ActivityPage() {
+  return (
+    <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+      <Inner />
+    </Suspense>
+  );
+}
+
+function Inner() {
   const { workspaceId } = useSelectedWorkspace();
-  const [days, setDays] = useState(14);
-  const [subjectType, setSubjectType] = useState<string>("");
-  const [actorId, setActorFilter] = useState<string>("");
-  const [kind, setKindFilter] = useState<string>("");
+  const [daysStr, setDaysStr] = useSearchParamState("days", "14");
+  const days = Number(daysStr) || 14;
+  const [subjectType, setSubjectType] = useSearchParamState("subjectType");
+  const [actorId, setActorFilter] = useSearchParamState("actor");
+  const [kind, setKindFilter] = useSearchParamState("kind");
 
   const from = isoDate(daysAgo(days));
   const to = isoDate(todayEnd());
@@ -80,8 +91,8 @@ export default function ActivityPage() {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <Select
-              value={String(days)}
-              onChange={(e) => setDays(Number(e.target.value))}
+              value={daysStr}
+              onChange={(e) => setDaysStr(e.target.value)}
               className="h-8 min-w-[110px] text-xs"
             >
               <option value="3">3 Tage</option>
@@ -120,6 +131,19 @@ export default function ActivityPage() {
                 <option key={k} value={k}>{k}</option>
               ))}
             </Select>
+            <ExportCsvButton
+              rows={events}
+              filenamePrefix="activity"
+              columns={[
+                { header: "At", value: (r) => r.at },
+                { header: "Kind", value: (r) => r.kind },
+                { header: "SubjectType", value: (r) => r.subjectType },
+                { header: "SubjectId", value: (r) => r.subjectId },
+                { header: "ActorId", value: (r) => r.actorId ?? "" },
+                { header: "Summary", value: (r) => r.summary },
+                { header: "Payload", value: (r) => JSON.stringify(r.payload ?? {}) },
+              ]}
+            />
           </div>
         }
       />

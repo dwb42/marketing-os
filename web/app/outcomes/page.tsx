@@ -17,6 +17,7 @@ import { useSelectedWorkspace, useSelectedProduct } from "@/hooks/use-workspace"
 import { api } from "@/lib/api";
 import { daysAgo, todayEnd, isoDate } from "@/lib/format";
 import { TrendingUp, Settings as SettingsIcon } from "lucide-react";
+import { ExportCsvButton } from "@/components/common/export-button";
 
 export default function OutcomesPage() {
   const { workspaceId } = useSelectedWorkspace();
@@ -116,6 +117,20 @@ export default function OutcomesPage() {
               <option value="30">30 Tage</option>
               <option value="90">90 Tage</option>
             </Select>
+            <ExportCsvButton
+              rows={events}
+              filenamePrefix="outcomes"
+              columns={[
+                { header: "OccurredAt", value: (r) => r.occurredAt },
+                { header: "Type", value: (r) => r.type },
+                { header: "SessionRef", value: (r) => r.sessionRef ?? "" },
+                { header: "UtmSource", value: (r) => (r.attribution as Record<string, string>)?.utm_source ?? "" },
+                { header: "UtmMedium", value: (r) => (r.attribution as Record<string, string>)?.utm_medium ?? "" },
+                { header: "UtmCampaign", value: (r) => (r.attribution as Record<string, string>)?.utm_campaign ?? "" },
+                { header: "Attribution", value: (r) => JSON.stringify(r.attribution ?? {}) },
+                { header: "Payload", value: (r) => JSON.stringify(r.payload ?? {}) },
+              ]}
+            />
           </div>
         }
       />

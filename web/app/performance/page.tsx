@@ -15,18 +15,20 @@ import { useSelectedWorkspace } from "@/hooks/use-workspace";
 import { useDashboardData } from "@/hooks/use-dashboard";
 import { formatNumber, formatMoneyFromMicros, formatPercent } from "@/lib/format";
 import { BarChart3 } from "lucide-react";
+import { ExportCsvButton } from "@/components/common/export-button";
 
 export default function PerformancePage() {
   const { workspaceId, workspace } = useSelectedWorkspace();
   const [days, setDays] = useState(30);
+  const [compare, setCompare] = useState(false);
 
-  const dash = useDashboardData(workspaceId, null, days);
+  const dash = useDashboardData(workspaceId, null, days, compare);
 
   if (!workspaceId) {
     return <EmptyState title="Kein Workspace ausgewählt" />;
   }
 
-  // Combine all perf rows for global chart.
+  // Combine all perf rows for global chart (padding with zeros for missing days).
   const allRows = dash.series.map((s) => ({
     id: s.date,
     channelCampaignId: "agg",
@@ -41,32 +43,82 @@ export default function PerformancePage() {
     syncRunId: null,
   }));
 
+  // Delta helpers
+  const delta = (curr: number, prev: number): { pct: number | null; dir: 1 | -1 | 0 } => {
+    if (!compare || prev === 0) return { pct: null, dir: curr > 0 ? 1 : 0 };
+    const pct = ((curr - prev) / prev) * 100;
+    return { pct, dir: pct > 0 ? 1 : pct < 0 ? -1 : 0 };
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Performance"
         description={workspace ? `${workspace.name} · aggregiert über alle Channel-Kampagnen` : ""}
         actions={
-          <Select
-            value={String(days)}
-            onChange={(e) => setDays(Number(e.target.value))}
-            className="h-8 min-w-[120px] text-xs"
-          >
-            <option value="7">7 Tage</option>
-            <option value="14">14 Tage</option>
-            <option value="30">30 Tage</option>
-            <option value="60">60 Tage</option>
-            <option value="90">90 Tage</option>
-          </Select>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Select
+              value={String(days)}
+              onChange={(e) => setDays(Number(e.target.value))}
+              className="h-8 min-w-[120px] text-xs"
+            >
+              <option value="7">7 Tage</option>
+              <option value="14">14 Tage</option>
+              <option value="30">30 Tage</option>
+              <option value="60">60 Tage</option>
+              <option value="90">90 Tage</option>
+            </Select>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none px-2 h-8 rounded-md border border-border hover:bg-muted">
+              <input
+                type="checkbox"
+                checked={compare}
+                onChange={(e) => setCompare(e.target.checked)}
+                className="accent-primary"
+              />
+              vs. Vorperiode
+            </label>
+            <ExportCsvButton
+              rows={dash.ccpTotals}
+              filenamePrefix="performance-per-campaign"
+              columns={[
+                { header: "Campaign", value: (r) => r.campaignName },
+                { header: "ChannelCampaignId", value: (r) => r.channelCampaignId },
+                { header: "Channel", value: (r) => r.channel },
+                { header: "Status", value: (r) => r.status },
+                { header: "Impressions", value: (r) => r.impressions },
+                { header: "Clicks", value: (r) => r.clicks },
+                { header: "CTR", value: (r) => (r.impressions > 0 ? r.clicks / r.impressions : 0) },
+                { header: "SpendEUR", value: (r) => (r.costMicros / 1_000_000).toFixed(2) },
+              ]}
+            />
+          </div>
         }
       />
 
       {dash.isError ? <ErrorState error={dash.error} /> : null}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiMini label="Impressionen" value={formatNumber(dash.totals.impressions)} loading={dash.isLoading} />
-        <KpiMini label="Klicks" value={formatNumber(dash.totals.clicks)} loading={dash.isLoading} />
-        <KpiMini label="Spend" value={formatMoneyFromMicros(dash.totals.costMicros)} loading={dash.isLoading} />
+        <KpiMini
+          label="Impressionen"
+          value={formatNumber(dash.totals.impressions)}
+          prev={compare ? formatNumber(dash.prevTotals.impressions) : undefined}
+          delta={delta(dash.totals.impressions, dash.prevTotals.impressions)}
+          loading={dash.isLoading}
+        />
+        <KpiMini
+          label="Klicks"
+          value={formatNumber(dash.totals.clicks)}
+          prev={compare ? formatNumber(dash.prevTotals.clicks) : undefined}
+          delta={delta(dash.totals.clicks, dash.prevTotals.clicks)}
+          loading={dash.isLoading}
+        />
+        <KpiMini
+          label="Spend"
+          value={formatMoneyFromMicros(dash.totals.costMicros)}
+          prev={compare ? formatMoneyFromMicros(dash.prevTotals.costMicros) : undefined}
+          delta={delta(dash.totals.costMicros, dash.prevTotals.costMicros)}
+          loading={dash.isLoading}
+        />
         <KpiMini
           label="CTR · CPC"
           value={
@@ -158,15 +210,50 @@ export default function PerformancePage() {
   );
 }
 
-function KpiMini({ label, value, loading }: { label: string; value: string; loading?: boolean }) {
+function KpiMini({
+  label,
+  value,
+  prev,
+  delta,
+  loading,
+}: {
+  label: string;
+  value: string;
+  prev?: string;
+  delta?: { pct: number | null; dir: 1 | -1 | 0 };
+  loading?: boolean;
+}) {
+  const deltaClass = !delta
+    ? "text-muted-foreground"
+    : delta.dir > 0
+      ? "text-emerald-600 dark:text-emerald-400"
+      : delta.dir < 0
+        ? "text-red-600 dark:text-red-400"
+        : "text-muted-foreground";
+
   return (
     <Card className="p-4">
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+          {label}
+        </div>
+        {delta?.pct !== null && delta?.pct !== undefined ? (
+          <div className={`text-[11px] font-medium tabular-nums ${deltaClass}`}>
+            {delta.pct > 0 ? "+" : ""}
+            {delta.pct.toFixed(0)}%
+          </div>
+        ) : null}
+      </div>
       {loading ? (
         <Skeleton className="h-7 w-24 mt-1.5" />
       ) : (
         <div className="text-xl font-semibold tabular-nums mt-1">{value}</div>
       )}
+      {prev ? (
+        <div className="text-[11px] text-muted-foreground tabular-nums mt-1">
+          Vorher: {prev}
+        </div>
+      ) : null}
     </Card>
   );
 }
