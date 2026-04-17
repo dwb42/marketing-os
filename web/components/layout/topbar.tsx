@@ -5,10 +5,12 @@ import { Moon, Sun, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { useSelectedWorkspace } from "@/hooks/use-workspace";
+import { useCmdk } from "@/components/cmd-k/context";
 
 export function Topbar() {
   const { theme, setTheme } = useTheme();
   const { workspaceId, setWorkspaceId, workspaces } = useSelectedWorkspace();
+  const { setOpen } = useCmdk();
 
   return (
     <header className="sticky top-0 z-20 h-14 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -33,31 +35,39 @@ export function Topbar() {
           </div>
         </div>
 
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            title="Suche (cmd+k)"
-            className="text-muted-foreground hover:text-foreground"
-            onClick={() => {
-              if (typeof window !== "undefined") {
-                window.location.href = "/admin/search/";
-              }
-            }}
-          >
-            <Search size={16} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            title="Theme umschalten"
-            className="text-muted-foreground hover:text-foreground"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          >
-            <Sun size={16} className="hidden dark:block" />
-            <Moon size={16} className="block dark:hidden" />
-          </Button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="hidden md:flex items-center gap-2 h-8 rounded-md border border-border bg-background hover:bg-muted px-2.5 text-xs text-muted-foreground transition-colors"
+          title="Suche / Befehle (⌘K)"
+        >
+          <Search size={13} />
+          <span>Suche…</span>
+          <kbd className="ml-4 font-mono text-[10px] px-1 border border-border rounded">
+            ⌘K
+          </kbd>
+        </button>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden text-muted-foreground hover:text-foreground"
+          onClick={() => setOpen(true)}
+          title="Suche"
+        >
+          <Search size={16} />
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          title="Theme umschalten"
+          className="text-muted-foreground hover:text-foreground"
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+        >
+          <Sun size={16} className="hidden dark:block" />
+          <Moon size={16} className="block dark:hidden" />
+        </Button>
       </div>
     </header>
   );

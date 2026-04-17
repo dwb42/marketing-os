@@ -14,10 +14,12 @@ import { RelativeTime } from "@/components/common/relative-time";
 import { PerformanceChart } from "@/components/performance/performance-chart";
 import { EmptyState } from "@/components/common/empty-state";
 import { iconForEvent } from "@/components/activity/event-icon";
+import { AssetDiffViewer } from "@/components/assets/asset-diff-viewer";
+import { useState } from "react";
 import { formatDate, formatDateTime, daysAgo, todayEnd, isoDate, formatNumber, formatMoneyFromMicros, formatPercent } from "@/lib/format";
 import { api } from "@/lib/api";
 import type { AssetVersion, Campaign } from "@/lib/types";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft, FileDiff } from "lucide-react";
 
 export function CampaignDetail({
   campaignId,
@@ -70,6 +72,8 @@ export function CampaignDetail({
       enabled: !!workspaceId,
     })),
   });
+
+  const [diffAsset, setDiffAsset] = useState<{ id: string; name: string } | null>(null);
 
   if (campaignQ.isLoading) {
     return (
@@ -255,6 +259,7 @@ export function CampaignDetail({
               (campaign.campaignAssets ?? []).map((ca, i) => {
                 const versions: AssetVersion[] = assetVersionsQueries[i]?.data ?? [];
                 const latest = versions[versions.length - 1];
+                const canDiff = versions.length >= 2;
                 return (
                   <Card key={ca.assetId}>
                     <CardContent className="p-4 flex items-start gap-3">
@@ -276,12 +281,32 @@ export function CampaignDetail({
                           ) : null}
                         </div>
                       </div>
+                      {canDiff ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setDiffAsset({ id: ca.assetId, name: ca.role ?? "asset" })}
+                        >
+                          <FileDiff size={13} />
+                          Diff
+                        </Button>
+                      ) : null}
                     </CardContent>
                   </Card>
                 );
               })
             )}
           </div>
+
+          {diffAsset ? (
+            <AssetDiffViewer
+              open={!!diffAsset}
+              onOpenChange={(v) => { if (!v) setDiffAsset(null); }}
+              assetId={diffAsset.id}
+              assetName={diffAsset.name}
+              workspaceId={workspaceId}
+            />
+          ) : null}
         </TabsContent>
 
         <TabsContent value="syncs">

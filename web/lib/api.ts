@@ -162,6 +162,13 @@ export const api = {
       request<AssetVersion[]>("GET", `/assets/${assetId}/versions`, {
         query: { workspaceId },
       }),
+    diff: (assetId: string, workspaceId: string, a: string, b: string) =>
+      request<{
+        a: { id: string; versionNum: number; status: string; contentHash: string };
+        b: { id: string; versionNum: number; status: string; contentHash: string };
+        diff: Record<string, { a: unknown; b: unknown; changed: boolean }>;
+        identical: boolean;
+      }>("GET", `/assets/${assetId}/diff`, { query: { workspaceId, a, b } }),
   },
 
   performance: {
