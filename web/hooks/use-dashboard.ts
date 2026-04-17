@@ -1,0 +1,198 @@
+"use client";
+
+import { useQuery, useQueries } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { daysAgo, todayEnd, isoDate } from "@/lib/format";
+import type { Campaign, PerformanceRow, ChannelCampaign } from "@/lib/types";
+
+/**
+ * Dashboard data aggregator.
+ * Fetches campaigns → details → performance rows for every synced
+ * channel-campaign in the window, then rolls up totals + per-day series.
+ */
+export function useDashboardData(
+  workspaceId: string,
+  productId: string | null,
+  days = 14,
+) {
+  const from = isoDate(daysAgo(days));
+  const to = isoDate(todayEnd());
+
+  const campaignsQ = useQuery<Campaign[]>({
+    queryKey: ["campaigns", workspaceId],
+    queryFn: () => api.campaigns.list({ workspaceId }),
+    enabled: !!workspaceId,
+  });
+
+  const campaigns = campaignsQ.data ?? [];
+  // Only synced/paused campaigns have channelCampaigns with actual data.
+  const materializedCampaigns = campaigns.filter(
+    (c) => c.status === "SYNCED" || c.status === "PAUSED",
+  );
+
+  const detailQueries = useQueries({
+    queries: materializedCampaigns.map((c) => ({
+      queryKey: ["campaign", c.id, workspaceId],
+      queryFn: () => api.campaigns.get(c.id, workspaceId),
+      enabled: !!workspaceId,
+      staleTime: 30_000,
+    })),
+  });
+
+  const channelCampaigns: Array<ChannelCampaign & { campaignName: string }> = [];
+  for (let i = 0; i < detailQueries.length; i++) {
+    const d = detailQueries[i].data;
+    if (d?.channelCampaigns) {
+      for (const cc of d.channelCampaigns) {
+        channelCampaigns.push({ ...cc, campaignName: d.name });
+      }
+    }
+  }
+
+  const perfQueries = useQueries({
+    queries: channelCampaigns.map((cc) => ({
+      queryKey: ["performance", cc.id, from, to],
+      queryFn: () =>
+        api.performance.query({ channelCampaignId: cc.id, from, to }),
+      enabled: !!cc.id,
+      staleTime: 30_000,
+    })),
+  });
+
+  const allRows: PerformanceRow[] = [];
+  for (const q of perfQueries) if (q.data) allRows.push(...q.data);
+
+  // Totals over window
+  const totals = {
+    impressions: 0,
+    clicks: 0,
+    costMicros: 0,
+    conversions: 0,
+  };
+  for (const r of allRows) {
+    totals.impressions += r.impressions;
+    totals.clicks += r.clicks;
+    totals.costMicros += Number(r.costMicros);
+    totals.conversions += Number(r.conversions);
+  }
+
+  // Per-day time series (aggregated across all ccps)
+  type DayBucket = { date: string; impressions: number; clicks: number; costMicros: number };
+  const daily = new Map<string, DayBucket>();
+  for (const r of allRows) {
+    const key = r.date.slice(0, 10);
+    const b = daily.get(key) ?? {
+      date: key,
+      impressions: 0,
+      clicks: 0,
+      costMicros: 0,
+    };
+    b.impressions += r.impressions;
+    b.clicks += r.clicks;
+    b.costMicros += Number(r.costMicros);
+    daily.set(key, b);
+  }
+  const series = Array.from(daily.values()).sort((a, b) =>
+    a.date.localeCompare(b.date),
+  );
+
+  // Per-channel-campaign rollup (used for "Active Campaigns" table)
+  const ccpTotals = new Map<
+    string,
+    {
+      channelCampaignId: string;
+      campaignName: string;
+      channel: string;
+      externalId: string | null;
+      status: string;
+      impressions: number;
+      clicks: number;
+      costMicros: number;
+      sparkline: number[];
+    }
+  >();
+  for (const cc of channelCampaigns) {
+    ccpTotals.set(cc.id, {
+      channelCampaignId: cc.id,
+      campaignName: cc.campaignName,
+      channel: cc.channel,
+      externalId: cc.externalId,
+      status: cc.status,
+      impressions: 0,
+      clicks: 0,
+      costMicros: 0,
+      sparkline: [],
+    });
+  }
+  for (const r of allRows) {
+    const t = ccpTotals.get(r.channelCampaignId);
+    if (!t) continue;
+    t.impressions += r.impressions;
+    t.clicks += r.clicks;
+    t.costMicros += Number(r.costMicros);
+    t.sparkline.push(r.clicks);
+  }
+
+  const isLoading =
+    campaignsQ.isLoading ||
+    detailQueries.some((q) => q.isLoading) ||
+    perfQueries.some((q) => q.isLoading);
+  const isError =
+    campaignsQ.isError ||
+    detailQueries.some((q) => q.isError) ||
+    perfQueries.some((q) => q.isError);
+  const error =
+    campaignsQ.error ??
+    detailQueries.find((q) => q.error)?.error ??
+    perfQueries.find((q) => q.error)?.error;
+
+  return {
+    from,
+    to,
+    campaigns,
+    materializedCampaigns,
+    channelCampaigns,
+    totals,
+    series,
+    ccpTotals: Array.from(ccpTotals.values()),
+    isLoading,
+    isError,
+    error,
+  };
+}
+
+export function useOutcomeFunnel(productId: string, days = 14) {
+  const from = isoDate(daysAgo(days));
+  const to = isoDate(todayEnd());
+  return useQuery({
+    queryKey: ["funnel", productId, from, to],
+    queryFn: () => api.outcomes.funnel({ productId, from, to }),
+    enabled: !!productId,
+  });
+}
+
+export function useRecentChangelog(workspaceId: string, days = 14) {
+  const from = isoDate(daysAgo(days));
+  const to = isoDate(todayEnd());
+  return useQuery({
+    queryKey: ["changelog", workspaceId, from, to],
+    queryFn: () => api.changelog.query({ workspaceId, from, to }),
+    enabled: !!workspaceId,
+  });
+}
+
+export function useOpenFindings(workspaceId: string) {
+  return useQuery({
+    queryKey: ["findings", workspaceId, "OPEN"],
+    queryFn: () => api.findings.list({ workspaceId, status: "OPEN" }),
+    enabled: !!workspaceId,
+  });
+}
+
+export function useFailedSyncs(workspaceId: string) {
+  return useQuery({
+    queryKey: ["sync-runs", workspaceId, "FAILED"],
+    queryFn: () => api.syncRuns.list({ workspaceId, status: "FAILED" }),
+    enabled: !!workspaceId,
+  });
+}
