@@ -27,6 +27,7 @@ export const ID_PREFIXES = {
   outcome: "out",
   cluster: "clu",
   finding: "fnd",
+  attributionMatch: "atm",
 } as const;
 
 export type IdPrefix = (typeof ID_PREFIXES)[keyof typeof ID_PREFIXES];

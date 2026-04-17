@@ -166,6 +166,45 @@ Strukturierter Key-by-Key-Diff zwischen zwei AssetVersions.
 
 ### `GET /outcomes?productId=…&type=chat_started&from=…&to=…`
 
+## Attribution
+
+### `POST /attribution/match`
+
+Matcht eine eingehende Chat-Nachricht gegen die letzten `cta_click`-Outcomes
+des Products und gibt die `sessionRef` (alias `pm_cid`) zurück, falls
+identifizierbar — ohne dass die `pm_cid` im WhatsApp-Text mitlaufen muss.
+
+```json
+{
+  "productId": "prd_…",
+  "messageHash": "sha256 der Nachricht",
+  "senderHash": "sha256 der Sender-ID",
+  "occurredAt": "2026-04-17T18:00:10Z"
+}
+```
+
+Response:
+```json
+{ "sessionRef": "pmc_abc123", "confidence": "confirmed" }
+```
+
+- `confidence = "confirmed"` — genau 1 unmatched `cta_click` im Fenster
+  `[occurredAt − 15 min, occurredAt + 30 s]`.
+- `confidence = "ambiguous"` — ≥2 unmatched Clicks; nächstliegender gewinnt,
+  die übrigen bleiben für spätere Messages claimbar.
+- `confidence = "unattributed"` — kein Click im Fenster.
+
+Jeder Aufruf schreibt eine `AttributionMatch`-Zeile — auch Misses —
+abfragbar über die View `attribution_rate`:
+```sql
+SELECT product_id, day, confidence, n
+FROM attribution_rate
+ORDER BY day DESC, n DESC;
+```
+
+Der claim ist race-safe via CAS: `UPDATE … WHERE matchedAt IS NULL`. Ein
+Event kann maximal einer Message zugeordnet werden.
+
 ## Performance
 
 ### `GET /performance?channelCampaignId=ccp_…&from=…&to=…`

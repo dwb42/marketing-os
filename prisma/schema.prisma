@@ -75,10 +75,11 @@ model Product {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   brand     Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
-  audienceSegments AudienceSegment[]
-  campaigns        Campaign[]
-  outcomes         ProductOutcomeEvent[]
-  clusters         IntentCluster[]
+  audienceSegments   AudienceSegment[]
+  campaigns          Campaign[]
+  outcomes           ProductOutcomeEvent[]
+  clusters           IntentCluster[]
+  attributionMatches AttributionMatch[]
 
   @@unique([workspaceId, slug])
   @@index([workspaceId])
@@ -552,11 +553,40 @@ model ProductOutcomeEvent {
   attribution  Json     @default("{}")
   payload      Json     @default("{}")
   ingestedAt   DateTime @default(now())
+  // Populated when an AttributionMatch claimed this event as its
+  // matched cta_click. Used by the matcher to exclude already-matched
+  // candidates. A partial index on (productId, occurredAt) WHERE
+  // matchedAt IS NULL AND type='cta_click' is added via raw SQL in
+  // the migration — Prisma schema cannot express partial indexes.
+  matchedAt    DateTime?
 
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product          Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  attributionMatch AttributionMatch?
 
   @@index([productId, type, occurredAt])
   @@index([productId, occurredAt])
+}
+
+// Records every chat-message → cta_click attribution attempt, regardless
+// of whether it succeeded. One row per POST /attribution/match call.
+// confidence ∈ {confirmed, ambiguous, unattributed}.
+model AttributionMatch {
+  id                 String   @id
+  productId          String
+  messageHash        String
+  senderHash         String
+  occurredAt         DateTime
+  sessionRef         String?
+  confidence         String
+  matchedOutcomeEventId String?  @unique
+  candidateCount     Int
+  createdAt          DateTime @default(now())
+
+  product             Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  matchedOutcomeEvent ProductOutcomeEvent? @relation(fields: [matchedOutcomeEventId], references: [id], onDelete: SetNull)
+
+  @@index([productId, occurredAt])
+  @@index([senderHash, occurredAt])
 }
 
 // ────────────────────────────────────────────────────────────────────
