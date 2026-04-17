@@ -235,15 +235,47 @@ export const api = {
   },
 
   learnings: {
-    list: (params: { workspaceId: string; initiativeId?: string }) =>
+    list: (params: { workspaceId: string; initiativeId?: string; hypothesisId?: string }) =>
       request<Learning[]>("GET", "/learnings", { query: params }),
+    create: (body: {
+      workspaceId: string;
+      statement: string;
+      confidence?: "LOW" | "MEDIUM" | "HIGH";
+      evidence?: Array<{
+        type:
+          | "PERFORMANCE_WINDOW"
+          | "EXPERIMENT"
+          | "OUTCOME_WINDOW"
+          | "ANNOTATION"
+          | "FINDING"
+          | "OTHER";
+        ref: string;
+        note?: string;
+      }>;
+      initiativeId?: string;
+      hypothesisId?: string;
+      experimentId?: string;
+      validUntil?: string;
+      actorId?: string;
+    }) => request<{ id: string }>("POST", "/learnings", { body }),
   },
 
   annotations: {
-    // Backend only supports listing by subject (both subjectType + subjectId required).
     listForSubject: (workspaceId: string, subjectType: string, subjectId: string) =>
       request<Annotation[]>("GET", "/annotations", {
         query: { workspaceId, subjectType, subjectId },
+      }),
+    listWorkspace: (params: {
+      workspaceId: string;
+      pinned?: boolean;
+      subjectType?: string;
+    }) =>
+      request<Annotation[]>("GET", "/annotations", {
+        query: {
+          workspaceId: params.workspaceId,
+          ...(params.pinned !== undefined ? { pinned: String(params.pinned) } : {}),
+          ...(params.subjectType ? { subjectType: params.subjectType } : {}),
+        },
       }),
     create: (body: {
       workspaceId: string;

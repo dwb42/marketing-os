@@ -12,6 +12,7 @@ import { IdChip } from "@/components/common/id-chip";
 import { useSelectedWorkspace } from "@/hooks/use-workspace";
 import { api } from "@/lib/api";
 import { BookOpen } from "lucide-react";
+import { AddLearningButton } from "@/components/learnings/add-learning-button";
 
 export default function LearningsPage() {
   const { workspaceId } = useSelectedWorkspace();
@@ -28,6 +29,7 @@ export default function LearningsPage() {
       <PageHeader
         title="Learnings"
         description="Was wir aus Experimenten und Beobachtungen validiert wissen"
+        actions={<AddLearningButton workspaceId={workspaceId} />}
       />
 
       {q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : null}

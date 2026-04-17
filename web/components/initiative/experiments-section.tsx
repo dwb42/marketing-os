@@ -17,6 +17,7 @@ import {
 } from "@/hooks/use-mutations";
 import type { Experiment } from "@/lib/types";
 import { Play, Flag, Loader2 } from "lucide-react";
+import { AddLearningButton } from "@/components/learnings/add-learning-button";
 
 export function ExperimentsSection({
   initiativeId,
@@ -118,6 +119,14 @@ function ExperimentRow({
             Abschließen
           </Button>
         ) : null}
+        {e.status === "CONCLUDED" ? (
+          <AddLearningButton
+            workspaceId={workspaceId}
+            experimentId={e.id}
+            {...(e.hypothesisId ? { hypothesisId: e.hypothesisId } : {})}
+            label="Learning"
+          />
+        ) : null}
       </div>
 
       {concludeOpen ? (
@@ -145,6 +154,7 @@ function ConcludeDialog({
 }) {
   const [conclusion, setConclusion] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [learningAfter, setLearningAfter] = useState(false);
   const mut = useExperimentConclude(workspaceId);
 
   const submit = async () => {
@@ -156,44 +166,58 @@ function ConcludeDialog({
       await mut.mutateAsync({ experimentId, conclusion: conclusion.trim() });
       setConclusion("");
       onOpenChange(false);
+      // Follow-up: open the Learning dialog
+      setTimeout(() => setLearningAfter(true), 100);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Fehler");
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} title="Experiment abschließen" className="max-w-lg">
-      <div className="p-5 space-y-4">
-        <p className="text-xs text-muted-foreground">
-          Free-Text-Fazit. Konkrete Learnings solltest du separat als Learning
-          erfassen (folgende Iteration).
-        </p>
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Fazit</label>
-          <textarea
-            value={conclusion}
-            onChange={(e) => setConclusion(e.target.value)}
-            rows={5}
-            autoFocus
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            placeholder="Was wurde bestätigt / widerlegt? Nächster Schritt?"
-          />
-        </div>
-        {err ? (
-          <div className="text-xs text-red-600 dark:text-red-400 font-mono border border-red-500/20 bg-red-500/5 rounded p-2">
-            {err}
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange} title="Experiment abschließen" className="max-w-lg">
+        <div className="p-5 space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Free-Text-Fazit. Direkt danach kannst du ein strukturiertes
+            Learning erfassen — das verknüpft sich automatisch mit diesem
+            Experiment.
+          </p>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Fazit</label>
+            <textarea
+              value={conclusion}
+              onChange={(e) => setConclusion(e.target.value)}
+              rows={5}
+              autoFocus
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              placeholder="Was wurde bestätigt / widerlegt? Nächster Schritt?"
+            />
           </div>
-        ) : null}
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={mut.isPending}>
-            Abbrechen
-          </Button>
-          <Button onClick={submit} disabled={mut.isPending}>
-            {mut.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
-            Abschließen
-          </Button>
+          {err ? (
+            <div className="text-xs text-red-600 dark:text-red-400 font-mono border border-red-500/20 bg-red-500/5 rounded p-2">
+              {err}
+            </div>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={mut.isPending}>
+              Abbrechen
+            </Button>
+            <Button onClick={submit} disabled={mut.isPending}>
+              {mut.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
+              Abschließen
+            </Button>
+          </div>
         </div>
-      </div>
-    </Dialog>
+      </Dialog>
+      {learningAfter ? (
+        <AddLearningButton
+          workspaceId={workspaceId}
+          experimentId={experimentId}
+          autoOpen
+          label="Learning erfassen"
+          onClosed={() => setLearningAfter(false)}
+        />
+      ) : null}
+    </>
   );
 }

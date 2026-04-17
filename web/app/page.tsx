@@ -7,6 +7,7 @@ import { OutcomeFunnelWidget } from "@/components/dashboard/outcome-funnel";
 import { ActiveCampaignsWidget } from "@/components/dashboard/active-campaigns";
 import { ActivityFeedWidget } from "@/components/dashboard/activity-feed";
 import { AttentionInboxWidget } from "@/components/dashboard/attention-inbox";
+import { PinnedAnnotations } from "@/components/dashboard/pinned-annotations";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,8 @@ export default function DashboardPage() {
       {dash.isError && !dash.isLoading ? (
         <ErrorState error={dash.error} />
       ) : null}
+
+      <PinnedAnnotations workspaceId={workspaceId} />
 
       <KpiStrip
         totals={dash.totals}

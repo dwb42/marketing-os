@@ -33,6 +33,21 @@ export class AnnotationService {
       orderBy: { occurredAt: "asc" },
     });
   }
+
+  async listForWorkspace(
+    workspaceId: string,
+    filter: { pinned?: boolean; subjectType?: string } = {},
+  ) {
+    return prisma.annotation.findMany({
+      where: {
+        workspaceId,
+        ...(filter.pinned !== undefined ? { pinned: filter.pinned } : {}),
+        ...(filter.subjectType ? { subjectType: filter.subjectType } : {}),
+      },
+      orderBy: { occurredAt: "desc" },
+      take: 50,
+    });
+  }
 }
 
 export const annotationService = new AnnotationService();

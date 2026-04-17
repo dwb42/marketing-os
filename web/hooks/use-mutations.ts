@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { getActorId } from "@/lib/config";
+import type { Finding, IntentCluster } from "@/lib/types";
 
 /**
  * Mutation hooks for all write actions in the admin UI.
@@ -83,7 +84,47 @@ export function useFindingStatus(workspaceId: string) {
         status,
         ...(getActorId() ? { actorId: getActorId() } : {}),
       }),
-    onSuccess: () => {
+    onMutate: async ({ findingId, status }) => {
+      // Snapshot every findings cache entry + patch the matching row.
+      await qc.cancelQueries({ queryKey: ["findings-all"] });
+      await qc.cancelQueries({ queryKey: ["findings"] });
+      const snapshots: Array<[readonly unknown[], Finding[] | undefined]> = [];
+      qc.getQueriesData<Finding[]>({ queryKey: ["findings-all"] }).forEach(
+        ([key, data]) => {
+          snapshots.push([key, data]);
+          if (data) {
+            qc.setQueryData<Finding[]>(
+              key,
+              data.map((f) =>
+                f.id === findingId
+                  ? { ...f, status: status as Finding["status"] }
+                  : f,
+              ),
+            );
+          }
+        },
+      );
+      qc.getQueriesData<Finding[]>({ queryKey: ["findings"] }).forEach(
+        ([key, data]) => {
+          snapshots.push([key, data]);
+          if (data) {
+            qc.setQueryData<Finding[]>(
+              key,
+              data.map((f) =>
+                f.id === findingId
+                  ? { ...f, status: status as Finding["status"] }
+                  : f,
+              ),
+            );
+          }
+        },
+      );
+      return { snapshots };
+    },
+    onError: (_err, _vars, ctx) => {
+      ctx?.snapshots.forEach(([key, data]) => qc.setQueryData(key, data));
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["findings"] });
       qc.invalidateQueries({ queryKey: ["findings-all"] });
       qc.invalidateQueries({ queryKey: ["cluster"] });
@@ -99,7 +140,40 @@ export function useClusterValidate(workspaceId: string) {
         validation,
         ...(getActorId() ? { actorId: getActorId() } : {}),
       }),
-    onSuccess: () => {
+    onMutate: async ({ clusterId, validation }) => {
+      await qc.cancelQueries({ queryKey: ["cluster", clusterId] });
+      const prevDetail = qc.getQueryData<IntentCluster>(["cluster", clusterId, workspaceId]);
+      if (prevDetail) {
+        qc.setQueryData<IntentCluster>(
+          ["cluster", clusterId, workspaceId],
+          { ...prevDetail, validation: validation as IntentCluster["validation"] },
+        );
+      }
+      const prevLists: Array<[readonly unknown[], IntentCluster[] | undefined]> = [];
+      qc.getQueriesData<IntentCluster[]>({ queryKey: ["clusters"] }).forEach(
+        ([key, data]) => {
+          prevLists.push([key, data]);
+          if (data) {
+            qc.setQueryData<IntentCluster[]>(
+              key,
+              data.map((c) =>
+                c.id === clusterId
+                  ? { ...c, validation: validation as IntentCluster["validation"] }
+                  : c,
+              ),
+            );
+          }
+        },
+      );
+      return { prevDetail, prevLists };
+    },
+    onError: (_err, vars, ctx) => {
+      if (ctx?.prevDetail) {
+        qc.setQueryData(["cluster", vars.clusterId, workspaceId], ctx.prevDetail);
+      }
+      ctx?.prevLists.forEach(([key, data]) => qc.setQueryData(key, data));
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["cluster"] });
       qc.invalidateQueries({ queryKey: ["clusters"] });
       qc.invalidateQueries({ queryKey: ["changelog"] });
@@ -140,6 +214,41 @@ export function useExperimentConclude(workspaceId: string) {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["experiments"] });
+      qc.invalidateQueries({ queryKey: ["initiative-timeline"] });
+      qc.invalidateQueries({ queryKey: ["changelog"] });
+    },
+  });
+}
+
+export function useCreateLearning(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      statement: string;
+      confidence?: "LOW" | "MEDIUM" | "HIGH";
+      evidence?: Array<{
+        type:
+          | "PERFORMANCE_WINDOW"
+          | "EXPERIMENT"
+          | "OUTCOME_WINDOW"
+          | "ANNOTATION"
+          | "FINDING"
+          | "OTHER";
+        ref: string;
+        note?: string;
+      }>;
+      initiativeId?: string;
+      hypothesisId?: string;
+      experimentId?: string;
+      validUntil?: string;
+    }) =>
+      api.learnings.create({
+        workspaceId,
+        ...body,
+        ...(getActorId() ? { actorId: getActorId() } : {}),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["learnings"] });
       qc.invalidateQueries({ queryKey: ["initiative-timeline"] });
       qc.invalidateQueries({ queryKey: ["changelog"] });
     },

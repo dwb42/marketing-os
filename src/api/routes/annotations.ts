@@ -24,10 +24,23 @@ export async function registerAnnotationRoutes(app: FastifyInstance): Promise<vo
     const q = z
       .object({
         workspaceId: WorkspaceIdSchema,
-        subjectType: z.string(),
-        subjectId: z.string(),
+        subjectType: z.string().optional(),
+        subjectId: z.string().optional(),
+        pinned: z
+          .union([z.literal("true"), z.literal("false"), z.boolean()])
+          .optional()
+          .transform((v) =>
+            v === undefined ? undefined : v === true || v === "true",
+          ),
       })
       .parse(req.query);
-    return annotationService.listForSubject(q.workspaceId, q.subjectType, q.subjectId);
+
+    if (q.subjectType && q.subjectId) {
+      return annotationService.listForSubject(q.workspaceId, q.subjectType, q.subjectId);
+    }
+    return annotationService.listForWorkspace(q.workspaceId, {
+      ...(q.pinned !== undefined ? { pinned: q.pinned } : {}),
+      ...(q.subjectType ? { subjectType: q.subjectType } : {}),
+    });
   });
 }
