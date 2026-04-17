@@ -17,6 +17,7 @@ import { iconForEvent } from "@/components/activity/event-icon";
 import { AssetDiffViewer } from "@/components/assets/asset-diff-viewer";
 import { CampaignActions } from "@/components/campaigns/campaign-actions";
 import { CampaignReviewPanel } from "@/components/campaigns/campaign-review-panel";
+import { CampaignOutcomesTab } from "@/components/campaigns/campaign-outcomes-tab";
 import { AddAnnotationButton } from "@/components/annotations/add-annotation-button";
 import { AnnotationRow, EventRow } from "@/components/activity/timeline-rows";
 import { useState } from "react";
@@ -199,6 +200,7 @@ export function CampaignDetail({
         <TabsList>
           <TabsTrigger value="overview">Übersicht</TabsTrigger>
           <TabsTrigger value="performance">Performance</TabsTrigger>
+          <TabsTrigger value="outcomes">Outcomes</TabsTrigger>
           <TabsTrigger value="assets">Assets</TabsTrigger>
           <TabsTrigger value="approvals">
             Approvals{(approvalsQ.data?.length ?? 0) > 0 ? ` · ${approvalsQ.data?.length}` : ""}
@@ -275,6 +277,10 @@ export function CampaignDetail({
               <PerformanceChart rows={allPerfRows} loading={perfQueries.some((q) => q.isLoading)} />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="outcomes">
+          <CampaignOutcomesTab campaign={campaign} workspaceId={workspaceId} />
         </TabsContent>
 
         <TabsContent value="assets">

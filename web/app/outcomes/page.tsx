@@ -13,6 +13,8 @@ import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { OutcomeFunnelWidget } from "@/components/dashboard/outcome-funnel";
 import { RelativeTime } from "@/components/common/relative-time";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { AttributionGroups } from "@/components/outcomes/attribution-groups";
 import { useSelectedWorkspace, useSelectedProduct } from "@/hooks/use-workspace";
 import { api } from "@/lib/api";
 import { daysAgo, todayEnd, isoDate } from "@/lib/format";
@@ -185,61 +187,79 @@ export default function OutcomesPage() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Events</CardTitle>
-              <CardDescription>
-                {typeFilter ? `Filter: ${typeFilter}` : "Alle Typen"} · {events.length} im Zeitraum
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {eventsQ.isLoading ? (
-            <div className="p-5 space-y-2">
-              {[1, 2, 3, 4].map((i) => (
-                <Skeleton key={i} className="h-10 w-full" />
-              ))}
-            </div>
-          ) : events.length === 0 ? (
-            <div className="p-5">
-              <EmptyState
-                icon={<TrendingUp size={24} />}
-                title="Keine Events im Zeitraum"
-              />
-            </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-[11px] text-muted-foreground uppercase tracking-wide border-b border-border">
-                  <th className="text-left font-medium px-5 py-2">Typ</th>
-                  <th className="text-left font-medium px-2 py-2">Session</th>
-                  <th className="text-left font-medium px-2 py-2">Attribution</th>
-                  <th className="text-right font-medium px-5 py-2">Wann</th>
-                </tr>
-              </thead>
-              <tbody>
-                {events.slice(0, 200).map((e) => (
-                  <tr key={e.id} className="border-b border-border last:border-0 hover:bg-muted/40">
-                    <td className="px-5 py-2.5 font-medium">{e.type}</td>
-                    <td className="px-2 py-2.5 font-mono text-[11px] text-muted-foreground">
-                      {e.sessionRef ?? "—"}
-                    </td>
-                    <td className="px-2 py-2.5 text-[11px] text-muted-foreground font-mono max-w-[360px]">
-                      <div className="line-clamp-1">{formatAttribution(e.attribution)}</div>
-                    </td>
-                    <td className="px-5 py-2.5 text-right">
-                      <RelativeTime date={e.occurredAt} className="text-xs text-muted-foreground" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="events">
+        <TabsList>
+          <TabsTrigger value="events">Events · {events.length}</TabsTrigger>
+          <TabsTrigger value="campaign">Nach Campaign</TabsTrigger>
+          <TabsTrigger value="source">Nach Source</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="events">
+          <Card>
+            <CardContent className="p-0">
+              {eventsQ.isLoading ? (
+                <div className="p-5 space-y-2">
+                  {[1, 2, 3, 4].map((i) => (
+                    <Skeleton key={i} className="h-10 w-full" />
+                  ))}
+                </div>
+              ) : events.length === 0 ? (
+                <div className="p-5">
+                  <EmptyState
+                    icon={<TrendingUp size={24} />}
+                    title="Keine Events im Zeitraum"
+                  />
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-[11px] text-muted-foreground uppercase tracking-wide border-b border-border">
+                      <th className="text-left font-medium px-5 py-2">Typ</th>
+                      <th className="text-left font-medium px-2 py-2">Session</th>
+                      <th className="text-left font-medium px-2 py-2">Attribution</th>
+                      <th className="text-right font-medium px-5 py-2">Wann</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {events.slice(0, 200).map((e) => (
+                      <tr key={e.id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                        <td className="px-5 py-2.5 font-medium">{e.type}</td>
+                        <td className="px-2 py-2.5 font-mono text-[11px] text-muted-foreground">
+                          {e.sessionRef ?? "—"}
+                        </td>
+                        <td className="px-2 py-2.5 text-[11px] text-muted-foreground font-mono max-w-[360px]">
+                          <div className="line-clamp-1">{formatAttribution(e.attribution)}</div>
+                        </td>
+                        <td className="px-5 py-2.5 text-right">
+                          <RelativeTime date={e.occurredAt} className="text-xs text-muted-foreground" />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="campaign">
+          <AttributionGroups
+            events={events}
+            by="utm_campaign"
+            loading={eventsQ.isLoading}
+            funnelOrder={(funnelQ.data?.funnel ?? []).map((f) => f.type)}
+          />
+        </TabsContent>
+
+        <TabsContent value="source">
+          <AttributionGroups
+            events={events}
+            by="utm_source"
+            loading={eventsQ.isLoading}
+            funnelOrder={(funnelQ.data?.funnel ?? []).map((f) => f.type)}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
