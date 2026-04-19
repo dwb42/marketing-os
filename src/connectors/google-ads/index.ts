@@ -312,6 +312,55 @@ export class GoogleAdsConnector implements ChannelConnector {
     };
   }
 
+  async getCampaignBudgetResource(
+    customerId: string,
+    externalCampaignId: string,
+  ): Promise<string> {
+    this.ensureAuthenticated();
+    const query = `SELECT campaign.id, campaign.campaign_budget FROM campaign WHERE campaign.id = ${externalCampaignId}`;
+    const data = (await googleAdsRequest(
+      "POST",
+      `${BASE}/customers/${customerId}/googleAds:searchStream`,
+      this.accessToken!,
+      this.developerToken!,
+      { query },
+      this.loginCustomerId,
+    )) as Array<{ results?: Array<{ campaign?: { campaignBudget?: string } }> }>;
+    for (const batch of data) {
+      for (const row of batch.results ?? []) {
+        const budget = row.campaign?.campaignBudget;
+        if (budget) return budget;
+      }
+    }
+    throw new ConnectorError("PERMANENT", `Budget for campaign ${externalCampaignId} not found`);
+  }
+
+  async updateCampaignBudget(
+    customerId: string,
+    budgetResource: string,
+    amountMicros: bigint,
+  ): Promise<void> {
+    this.ensureAuthenticated();
+    await googleAdsRequest(
+      "POST",
+      `${BASE}/customers/${customerId}/campaignBudgets:mutate`,
+      this.accessToken!,
+      this.developerToken!,
+      {
+        operations: [
+          {
+            update: {
+              resourceName: budgetResource,
+              amountMicros: amountMicros.toString(),
+            },
+            updateMask: "amount_micros",
+          },
+        ],
+      },
+      this.loginCustomerId,
+    );
+  }
+
   private ensureAuthenticated(): void {
     if (!this.accessToken || !this.developerToken) {
       throw new ConnectorError("AUTH", "Not authenticated — call authenticate() first");

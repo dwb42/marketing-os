@@ -18,6 +18,7 @@
     "seed:pflegemax": "tsx scripts/seed-pflegemax.ts",
     "seed:welle1": "tsx --env-file=.env scripts/seed-welle1.ts",
     "setup:google-ads": "tsx --env-file=.env scripts/setup-google-ads.ts",
+    "resync:welle1": "tsx --env-file=.env scripts/resync-welle1.ts",
     "smoke": "tsx scripts/smoke.ts",
     "test": "node --test --import tsx tests/**/*.test.ts"
   },
