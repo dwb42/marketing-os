@@ -16,3 +16,9 @@ export function yesterdayUtc(): Date {
   d.setUTCDate(d.getUTCDate() - 1);
   return d;
 }
+
+export function daysAgoUtc(n: number): Date {
+  const d = startOfUtcDay(nowUtc());
+  d.setUTCDate(d.getUTCDate() - n);
+  return d;
+}

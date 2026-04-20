@@ -4,9 +4,12 @@ import { prisma } from "../../services/prisma.js";
 import { performanceService } from "../../services/performance.service.js";
 import { channelStructureService } from "../../services/channel-structure.service.js";
 import { syncRunService } from "../../services/sync-run.service.js";
+import { outcomeService } from "../../services/outcome.service.js";
+import { googleAdsConnector } from "../../connectors/google-ads/index.js";
+import { changeEventService } from "../../services/change-event.service.js";
 import { DomainError } from "../../lib/errors.js";
 import { WorkspaceIdSchema } from "../schemas.js";
-import { startOfUtcDay, yesterdayUtc } from "../../lib/time.js";
+import { startOfUtcDay, yesterdayUtc, daysAgoUtc } from "../../lib/time.js";
 
 // Serialises BigInt-carrying rows for JSON over-the-wire.
 function serializeBigInt<T extends Record<string, unknown>>(row: T): T {
@@ -241,6 +244,187 @@ export async function registerStructureRoutes(app: FastifyInstance): Promise<voi
 
     const rows = await performanceService.queryAd(p.id, q.from, q.to);
     return rows.map(serializeBigInt);
+  });
+
+  // ── GET /campaigns/:id/outcome-attribution ─────────────────────
+  // Liefert OS-seitige Conversions (aus `ProductOutcomeEvent`)
+  // gruppiert nach utm_content (≙ externalAdGroupId) und utm_term
+  // (≙ Keyword-Text). Basis für die "OS-Conv"-Spalte.
+  app.get("/campaigns/:id/outcome-attribution", async (req) => {
+    const p = z.object({ id: z.string().startsWith("cmp_") }).parse(req.params);
+    const q = z
+      .object({
+        workspaceId: WorkspaceIdSchema,
+        from: z.coerce.date().optional(),
+        to: z.coerce.date().optional(),
+      })
+      .parse(req.query);
+
+    const campaign = await prisma.campaign.findFirst({
+      where: { id: p.id, workspaceId: q.workspaceId },
+      include: {
+        campaignAssets: {
+          include: {
+            asset: {
+              include: {
+                versions: {
+                  where: { status: { not: "DRAFT" } },
+                  orderBy: { versionNum: "desc" },
+                  take: 1,
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!campaign) throw new DomainError("NOT_FOUND", `Campaign ${p.id} not found`);
+
+    const utmCampaignValues = new Set<string>();
+    const targetUrls: string[] = [];
+    for (const ca of campaign.campaignAssets) {
+      const version = ca.asset.versions[0];
+      if (!version) continue;
+      const c = (version.content ?? {}) as Record<string, unknown>;
+      const url = typeof c.targetUrl === "string" ? c.targetUrl : null;
+      if (!url) continue;
+      targetUrls.push(url);
+      try {
+        const u = new URL(url);
+        const utm = u.searchParams.get("utm_campaign");
+        if (utm) utmCampaignValues.add(utm);
+      } catch {
+        // ignore unparseable
+      }
+    }
+
+    const from = q.from ?? daysAgoUtc(30);
+    const to = q.to ?? startOfUtcDay(new Date());
+
+    const breakdown = await outcomeService.breakdownByAdGroupAndKeyword({
+      productId: campaign.productId,
+      utmCampaignValues: Array.from(utmCampaignValues),
+      from,
+      to,
+    });
+
+    return {
+      utmCampaignValues: Array.from(utmCampaignValues),
+      targetUrls,
+      from,
+      to,
+      ...breakdown,
+    };
+  });
+
+  // ── POST /channel-campaigns/:ccId/tracking-suffix ──────────────
+  // Setzt final_url_suffix auf der Google-Ads-Kampagne, damit jeder
+  // Klick automatisch utm_content={adgroupid} und utm_term={keyword}
+  // mitschickt. Pflicht-Schritt, damit OS-Attribution pro AdGroup /
+  // Keyword funktioniert.
+  app.post("/channel-campaigns/:ccId/tracking-suffix", async (req) => {
+    const p = z.object({ ccId: z.string().startsWith("ccp_") }).parse(req.params);
+    const body = z
+      .object({
+        workspaceId: WorkspaceIdSchema,
+        actorId: z.string().optional(),
+        suffix: z
+          .string()
+          .optional()
+          .describe(
+            "Expliziter Tracking-Suffix. Default: utm_source=google&utm_medium=cpc" +
+              "&utm_campaign=<der utm_campaign-Wert aus den Campaign-Assets>" +
+              "&utm_content={adgroupid}&utm_term={keyword}&gclid={gclid}",
+          ),
+      })
+      .parse(req.body);
+
+    const cc = await prisma.channelCampaign.findFirst({
+      where: { id: p.ccId, workspaceId: body.workspaceId },
+      include: {
+        campaign: {
+          include: {
+            campaignAssets: {
+              include: {
+                asset: {
+                  include: {
+                    versions: {
+                      where: { status: { not: "DRAFT" } },
+                      orderBy: { versionNum: "desc" },
+                      take: 1,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        channelConnection: { include: { integrationAccount: true } },
+      },
+    });
+    if (!cc) throw new DomainError("NOT_FOUND", `ChannelCampaign ${p.ccId} not found`);
+    if (cc.channel !== "GOOGLE_ADS") {
+      throw new DomainError("INVALID_STATE", "Tracking-Suffix nur für GOOGLE_ADS");
+    }
+    if (!cc.externalId) {
+      throw new DomainError("INVALID_STATE", "ChannelCampaign hat keine externalId");
+    }
+    const ica = cc.channelConnection?.integrationAccount;
+    if (!ica) throw new DomainError("INVALID_STATE", "Keine IntegrationAccount");
+
+    let suffix = body.suffix;
+    if (!suffix) {
+      let utmCampaign: string | null = null;
+      for (const ca of cc.campaign.campaignAssets) {
+        const v = ca.asset.versions[0];
+        if (!v) continue;
+        const c = (v.content ?? {}) as Record<string, unknown>;
+        const url = typeof c.targetUrl === "string" ? c.targetUrl : null;
+        if (!url) continue;
+        try {
+          const u = new URL(url);
+          const utm = u.searchParams.get("utm_campaign");
+          if (utm) {
+            utmCampaign = utm;
+            break;
+          }
+        } catch {}
+      }
+      if (!utmCampaign) {
+        throw new DomainError(
+          "INVALID_INPUT",
+          "Kein utm_campaign in Campaign-Assets gefunden. Übergib `suffix` explizit oder setze utm_campaign in einer Asset-Version.",
+        );
+      }
+      suffix =
+        `utm_source=google&utm_medium=cpc` +
+        `&utm_campaign=${encodeURIComponent(utmCampaign)}` +
+        `&utm_content={adgroupid}&utm_term={keyword}&gclid={gclid}`;
+    }
+
+    await googleAdsConnector.authenticate({
+      id: ica.id,
+      channel: "google_ads",
+      externalId: ica.externalId,
+      credentialsEncrypted: JSON.stringify(ica.credentials),
+    });
+    await googleAdsConnector.setCampaignFinalUrlSuffix(
+      ica.externalId,
+      cc.externalId,
+      suffix,
+    );
+
+    await changeEventService.append({
+      workspaceId: body.workspaceId,
+      subjectType: "CHANNEL_CAMPAIGN",
+      subjectId: cc.id,
+      ...(body.actorId !== undefined ? { actorId: body.actorId } : {}),
+      kind: "channel_campaign.tracking_suffix_set",
+      summary: `Final-URL-Suffix gesetzt (${suffix.length} Zeichen)`,
+      payload: { suffix },
+    });
+
+    return { ok: true, suffix };
   });
 
   // ── GET /campaigns/:id/changelog-tree ──────────────────────────

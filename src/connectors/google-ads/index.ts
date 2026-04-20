@@ -385,6 +385,36 @@ export class GoogleAdsConnector implements ChannelConnector {
     );
   }
 
+  // Setzt final_url_suffix auf Campaign-Level. Google hängt den Suffix
+  // automatisch an jeden Final-URL-Klick an (inkl. ValueTrack-Expansion
+  // wie {adgroupid}, {keyword}, {gclid}). Pflicht, damit OS-seitige
+  // Attribution auf Ad-Group- und Keyword-Ebene funktioniert.
+  async setCampaignFinalUrlSuffix(
+    customerId: string,
+    externalCampaignId: string,
+    suffix: string,
+  ): Promise<void> {
+    this.ensureAuthenticated();
+    await googleAdsRequest(
+      "POST",
+      `${BASE}/customers/${customerId}/campaigns:mutate`,
+      this.accessToken!,
+      this.developerToken!,
+      {
+        operations: [
+          {
+            update: {
+              resourceName: `customers/${customerId}/campaigns/${externalCampaignId}`,
+              finalUrlSuffix: suffix,
+            },
+            updateMask: "final_url_suffix",
+          },
+        ],
+      },
+      this.loginCustomerId,
+    );
+  }
+
   // ── Strukturelle Pulls ─────────────────────────────────────────
 
   private async searchStream(

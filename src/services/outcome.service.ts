@@ -50,6 +50,89 @@ export class OutcomeService {
       orderBy: { occurredAt: "asc" },
     });
   }
+
+  // Attribution-Breakdown: gruppiert Outcomes nach utm_content (≙
+  // externalAdGroupId) und utm_term (≙ Keyword-Text), gefiltert auf
+  // Outcomes mit utm_campaign = einem der gegebenen Werte.
+  //
+  // Wird vom Campaign-Detail gebraucht, um OS-attribuierte Conversions
+  // pro Ad-Group und pro Keyword anzuzeigen.
+  async breakdownByAdGroupAndKeyword(params: {
+    productId: string;
+    utmCampaignValues: string[];
+    from: Date;
+    to: Date;
+  }): Promise<{
+    totalMatched: number;
+    byAdGroupExternalId: Record<string, { total: number; byType: Record<string, number> }>;
+    byKeywordText: Record<string, { total: number; byType: Record<string, number> }>;
+    unattributedToAdGroup: number;
+  }> {
+    if (params.utmCampaignValues.length === 0) {
+      return {
+        totalMatched: 0,
+        byAdGroupExternalId: {},
+        byKeywordText: {},
+        unattributedToAdGroup: 0,
+      };
+    }
+
+    const rows = await prisma.$queryRaw<
+      Array<{
+        type: string;
+        utm_content: string | null;
+        utm_term: string | null;
+        count: bigint;
+      }>
+    >`
+      SELECT
+        type,
+        attribution->>'utm_content' AS utm_content,
+        attribution->>'utm_term'    AS utm_term,
+        COUNT(*)                    AS count
+      FROM "ProductOutcomeEvent"
+      WHERE "productId"   = ${params.productId}
+        AND "occurredAt" >= ${params.from}
+        AND "occurredAt" <= ${params.to}
+        AND attribution->>'utm_campaign' = ANY(${params.utmCampaignValues}::text[])
+      GROUP BY type, utm_content, utm_term
+    `;
+
+    const byAdGroup: Record<
+      string,
+      { total: number; byType: Record<string, number> }
+    > = {};
+    const byKeyword: Record<
+      string,
+      { total: number; byType: Record<string, number> }
+    > = {};
+    let total = 0;
+    let unattributed = 0;
+
+    for (const r of rows) {
+      const n = Number(r.count);
+      total += n;
+      if (r.utm_content) {
+        const bucket = (byAdGroup[r.utm_content] ??= { total: 0, byType: {} });
+        bucket.total += n;
+        bucket.byType[r.type] = (bucket.byType[r.type] ?? 0) + n;
+      } else {
+        unattributed += n;
+      }
+      if (r.utm_term) {
+        const bucket = (byKeyword[r.utm_term] ??= { total: 0, byType: {} });
+        bucket.total += n;
+        bucket.byType[r.type] = (bucket.byType[r.type] ?? 0) + n;
+      }
+    }
+
+    return {
+      totalMatched: total,
+      byAdGroupExternalId: byAdGroup,
+      byKeywordText: byKeyword,
+      unattributedToAdGroup: unattributed,
+    };
+  }
 }
 
 export const outcomeService = new OutcomeService();

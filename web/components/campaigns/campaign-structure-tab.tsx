@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Link as LinkIcon, RefreshCw } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,6 +29,14 @@ import type {
   PerformanceRow,
 } from "@/lib/types";
 
+type OsAttribution = {
+  utmCampaignValues: string[];
+  totalMatched: number;
+  byAdGroupExternalId: Record<string, { total: number; byType: Record<string, number> }>;
+  byKeywordText: Record<string, { total: number; byType: Record<string, number> }>;
+  unattributedToAdGroup: number;
+};
+
 export function CampaignStructureTab({
   campaignId,
   workspaceId,
@@ -43,10 +51,25 @@ export function CampaignStructureTab({
     enabled: !!workspaceId,
   });
 
+  const osAttrQ = useQuery({
+    queryKey: ["outcome-attribution", campaignId, workspaceId],
+    queryFn: () => api.campaigns.outcomeAttribution(campaignId, { workspaceId }),
+    enabled: !!workspaceId,
+  });
+
   const syncMut = useMutation({
     mutationFn: () => api.campaigns.syncStructure(campaignId, { workspaceId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["campaign-structure", campaignId, workspaceId] });
+      qc.invalidateQueries({ queryKey: ["changelog-tree", campaignId, workspaceId] });
+      qc.invalidateQueries({ queryKey: ["outcome-attribution", campaignId, workspaceId] });
+    },
+  });
+
+  const trackingMut = useMutation({
+    mutationFn: (ccId: string) =>
+      api.channelCampaigns.setTrackingSuffix(ccId, { workspaceId }),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["changelog-tree", campaignId, workspaceId] });
     },
   });
@@ -114,13 +137,132 @@ export function CampaignStructureTab({
         </div>
       ) : null}
 
+      <OsAttributionBanner
+        attribution={osAttrQ.data}
+        channels={channels}
+        onSetSuffix={(ccId) => trackingMut.mutate(ccId)}
+        suffixPending={trackingMut.isPending}
+        suffixError={trackingMut.isError ? trackingMut.error : null}
+        suffixApplied={trackingMut.isSuccess ? trackingMut.data?.suffix : null}
+      />
+
       {channels.map((ch) => (
         <ChannelBlock
           key={ch.id}
           channel={ch}
           workspaceId={workspaceId}
+          osAttribution={osAttrQ.data ?? null}
         />
       ))}
+    </div>
+  );
+}
+
+function OsAttributionBanner({
+  attribution,
+  channels,
+  onSetSuffix,
+  suffixPending,
+  suffixError,
+  suffixApplied,
+}: {
+  attribution: OsAttribution | undefined;
+  channels: CampaignStructureChannel[];
+  onSetSuffix: (ccId: string) => void;
+  suffixPending: boolean;
+  suffixError: unknown;
+  suffixApplied: string | null | undefined;
+}) {
+  if (!attribution) return null;
+
+  const noUtm = attribution.utmCampaignValues.length === 0;
+  const hasAdGroupMatches = Object.keys(attribution.byAdGroupExternalId).length > 0;
+  const ccId = channels.find((c) => c.channel === "GOOGLE_ADS")?.id ?? null;
+
+  if (noUtm) {
+    return (
+      <div className="flex items-start gap-3 rounded-md border border-amber-500/30 bg-amber-500/[0.03] p-3 text-xs">
+        <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+        <div className="space-y-1">
+          <div className="font-medium">OS-Conversion-Loop offen: kein utm_campaign in den Assets.</div>
+          <div className="text-muted-foreground max-w-2xl">
+            Setze in einer Asset-Version ein <code className="font-mono">targetUrl</code> mit{" "}
+            <code className="font-mono">?utm_campaign=…</code>, damit Outcomes der Kampagne
+            zugeordnet werden können. Ad-Group-/Keyword-Attribution kommt anschließend über{" "}
+            <code className="font-mono">utm_content</code> und <code className="font-mono">utm_term</code>.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasAdGroupMatches) {
+    return (
+      <div className="flex items-start gap-3 rounded-md border border-amber-500/30 bg-amber-500/[0.03] p-3 text-xs">
+        <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+        <div className="space-y-2 flex-1">
+          <div className="font-medium">
+            OS-Conv pro Ad-Group noch leer — Final-URL-Suffix in Google Ads fehlt.
+          </div>
+          <div className="text-muted-foreground max-w-2xl">
+            Landing-Page kriegt <code className="font-mono">utm_campaign</code> (
+            <code className="font-mono">{attribution.utmCampaignValues.join(", ")}</code>), aber
+            nicht <code className="font-mono">utm_content={"{adgroupid}"}</code>. Klick unten, dann
+            setzt das OS auf der Google-Ads-Campaign einen Final-URL-Suffix, der bei jedem Klick
+            automatisch <code className="font-mono">utm_content</code> und{" "}
+            <code className="font-mono">utm_term</code> mitschickt.
+          </div>
+          {suffixApplied ? (
+            <div className="rounded-md border border-border bg-background p-2 font-mono text-[10px] break-all">
+              {suffixApplied}
+            </div>
+          ) : null}
+          {suffixError ? (
+            <div className="text-red-600 dark:text-red-400">
+              Setzen fehlgeschlagen: {(suffixError as Error).message}
+            </div>
+          ) : null}
+          {ccId ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onSetSuffix(ccId)}
+              disabled={suffixPending}
+            >
+              <LinkIcon size={13} />
+              {suffixPending ? "Setze…" : "Tracking-Suffix jetzt setzen"}
+            </Button>
+          ) : null}
+          <div className="text-[11px] text-muted-foreground">
+            Die Landing-Page muss <code className="font-mono">utm_content</code> und{" "}
+            <code className="font-mono">utm_term</code> aus der URL in die Outcome-Attribution
+            übernehmen.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs flex items-center gap-3 flex-wrap">
+      <span className="font-medium">OS-Conv attribuiert:</span>
+      <span className="tabular-nums">{attribution.totalMatched} Events</span>
+      <span className="opacity-40">·</span>
+      <span className="tabular-nums">
+        {Object.keys(attribution.byAdGroupExternalId).length} Ad-Group(s)
+      </span>
+      <span className="opacity-40">·</span>
+      <span className="tabular-nums">
+        {Object.keys(attribution.byKeywordText).length} Keyword(s)
+      </span>
+      {attribution.unattributedToAdGroup > 0 ? (
+        <>
+          <span className="opacity-40">·</span>
+          <span className="text-muted-foreground">
+            {attribution.unattributedToAdGroup} ohne utm_content
+          </span>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -128,9 +270,11 @@ export function CampaignStructureTab({
 function ChannelBlock({
   channel,
   workspaceId,
+  osAttribution,
 }: {
   channel: CampaignStructureChannel;
   workspaceId: string;
+  osAttribution: OsAttribution | null;
 }) {
   return (
     <div className="space-y-3">
@@ -164,12 +308,22 @@ function ChannelBlock({
                 <th className="text-right font-medium px-2 py-2">Impr</th>
                 <th className="text-right font-medium px-2 py-2">Klicks · CTR</th>
                 <th className="text-right font-medium px-2 py-2">Spend · CPC</th>
-                <th className="text-right font-medium px-3 py-2">Conv</th>
+                <th className="text-right font-medium px-2 py-2" title="Google-seitig gemessene Conversions (Google Ads Conversion-Tags)">
+                  Google-Conv
+                </th>
+                <th className="text-right font-medium px-3 py-2" title="Outcome-Events aus dem Marketing-OS, attribuiert via utm_content">
+                  OS-Conv
+                </th>
               </tr>
             </thead>
             <tbody>
               {channel.adGroups.map((ag) => (
-                <AdGroupRow key={ag.id} adGroup={ag} workspaceId={workspaceId} />
+                <AdGroupRow
+                  key={ag.id}
+                  adGroup={ag}
+                  workspaceId={workspaceId}
+                  osAttribution={osAttribution}
+                />
               ))}
             </tbody>
           </table>
@@ -205,9 +359,11 @@ function ChannelBlock({
 function AdGroupRow({
   adGroup,
   workspaceId,
+  osAttribution,
 }: {
   adGroup: ChannelStructureAdGroup;
   workspaceId: string;
+  osAttribution: OsAttribution | null;
 }) {
   const [expanded, setExpanded] = useState(false);
   const from = isoDate(daysAgo(30));
@@ -220,6 +376,9 @@ function AdGroupRow({
   });
 
   const totals = useMemo(() => aggregate(perfQ.data ?? []), [perfQ.data]);
+  const osConv = adGroup.externalId
+    ? osAttribution?.byAdGroupExternalId[adGroup.externalId]?.total ?? 0
+    : 0;
 
   return (
     <>
@@ -255,12 +414,19 @@ function AdGroupRow({
             · {formatMoneyFromMicros(totals.cpc)}
           </span>
         </td>
-        <td className="px-3 py-2 text-right tabular-nums">{formatNumber(totals.conversions, 0)}</td>
+        <td className="px-2 py-2 text-right tabular-nums">{formatNumber(totals.conversions, 0)}</td>
+        <td className="px-3 py-2 text-right tabular-nums font-semibold">
+          {formatNumber(osConv)}
+        </td>
       </tr>
       {expanded ? (
         <tr className="bg-muted/20">
-          <td colSpan={8} className="px-3 py-3">
-            <AdGroupDetail adGroup={adGroup} workspaceId={workspaceId} />
+          <td colSpan={9} className="px-3 py-3">
+            <AdGroupDetail
+              adGroup={adGroup}
+              workspaceId={workspaceId}
+              osAttribution={osAttribution}
+            />
           </td>
         </tr>
       ) : null}
@@ -271,9 +437,11 @@ function AdGroupRow({
 function AdGroupDetail({
   adGroup,
   workspaceId,
+  osAttribution,
 }: {
   adGroup: ChannelStructureAdGroup;
   workspaceId: string;
+  osAttribution: OsAttribution | null;
 }) {
   return (
     <div className="space-y-4">
@@ -308,6 +476,7 @@ function AdGroupDetail({
           <KeywordTable
             keywords={adGroup.keywords}
             workspaceId={workspaceId}
+            osAttribution={osAttribution}
           />
         )}
       </div>
@@ -396,9 +565,11 @@ function AdCard({
 function KeywordTable({
   keywords,
   workspaceId,
+  osAttribution,
 }: {
   keywords: ChannelStructureKeyword[];
   workspaceId: string;
+  osAttribution: OsAttribution | null;
 }) {
   const from = isoDate(daysAgo(30));
   const to = isoDate(todayEnd());
@@ -425,12 +596,16 @@ function KeywordTable({
             <th className="text-right font-medium px-2 py-1.5">CPC-Gebot</th>
             <th className="text-right font-medium px-2 py-1.5">Impr</th>
             <th className="text-right font-medium px-2 py-1.5">Klicks · CTR</th>
-            <th className="text-right font-medium px-3 py-1.5">Spend · CPC</th>
+            <th className="text-right font-medium px-2 py-1.5">Spend · CPC</th>
+            <th className="text-right font-medium px-3 py-1.5" title="OS-Outcomes attribuiert via utm_term">
+              OS-Conv
+            </th>
           </tr>
         </thead>
         <tbody>
           {keywords.map((k) => {
             const t = perfById.get(k.id) ?? emptyTotals();
+            const osConv = osAttribution?.byKeywordText[k.text]?.total ?? 0;
             return (
               <tr key={k.id} className="border-t border-border">
                 <td className="px-3 py-1.5 font-medium">{k.text}</td>
@@ -453,11 +628,14 @@ function KeywordTable({
                   {formatNumber(t.clicks)}{" "}
                   <span className="text-muted-foreground">· {formatPercent(t.ctr, 1)}</span>
                 </td>
-                <td className="px-3 py-1.5 text-right tabular-nums">
+                <td className="px-2 py-1.5 text-right tabular-nums">
                   {formatMoneyFromMicros(t.costMicros)}{" "}
                   <span className="text-muted-foreground">
                     · {formatMoneyFromMicros(t.cpc)}
                   </span>
+                </td>
+                <td className="px-3 py-1.5 text-right tabular-nums font-semibold">
+                  {formatNumber(osConv)}
                 </td>
               </tr>
             );

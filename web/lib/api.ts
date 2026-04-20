@@ -148,6 +148,38 @@ export const api = {
       request<ChangeEvent[]>("GET", `/campaigns/${id}/changelog-tree`, {
         query: params,
       }),
+    outcomeAttribution: (
+      id: string,
+      params: { workspaceId: string; from?: string; to?: string },
+    ) =>
+      request<{
+        utmCampaignValues: string[];
+        targetUrls: string[];
+        from: string;
+        to: string;
+        totalMatched: number;
+        byAdGroupExternalId: Record<
+          string,
+          { total: number; byType: Record<string, number> }
+        >;
+        byKeywordText: Record<
+          string,
+          { total: number; byType: Record<string, number> }
+        >;
+        unattributedToAdGroup: number;
+      }>("GET", `/campaigns/${id}/outcome-attribution`, { query: params }),
+  },
+
+  channelCampaigns: {
+    setTrackingSuffix: (
+      ccId: string,
+      body: { workspaceId: string; actorId?: string; suffix?: string },
+    ) =>
+      request<{ ok: true; suffix: string }>(
+        "POST",
+        `/channel-campaigns/${ccId}/tracking-suffix`,
+        { body },
+      ),
   },
 
   channelAdGroups: {
