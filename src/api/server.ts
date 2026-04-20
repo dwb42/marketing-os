@@ -1,5 +1,7 @@
+import path from "node:path";
 import Fastify, { FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
+import fastifyStatic from "@fastify/static";
 import { ZodError } from "zod";
 import { loadEnv } from "../config/env.js";
 import { logger } from "../lib/logger.js";
@@ -100,6 +102,14 @@ export async function buildServer(): Promise<FastifyInstance> {
   await registerSearchRoutes(app);
   await registerSyncTriggerRoutes(app);
   await registerAttributionRoutes(app);
+
+  const webOutDir = path.resolve(process.cwd(), "web/out");
+  await app.register(fastifyStatic, {
+    root: webOutDir,
+    prefix: "/admin/",
+    decorateReply: false,
+  });
+  app.get("/admin", (_req, reply) => reply.redirect("/admin/"));
 
   logger.info({ port: env.PORT }, "server ready");
   return app;
