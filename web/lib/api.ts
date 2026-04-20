@@ -117,6 +117,67 @@ export const api = {
         query: { workspaceId },
         body,
       }),
+    structure: (id: string, workspaceId: string) =>
+      request<import("./types").CampaignStructureChannel[]>(
+        "GET",
+        `/campaigns/${id}/structure`,
+        { query: { workspaceId } },
+      ),
+    syncStructure: (
+      id: string,
+      body: { workspaceId: string; actorId?: string; from?: string; to?: string },
+    ) =>
+      request<{
+        results: Array<{
+          channelCampaignId: string;
+          syncRunId: string;
+          structure: {
+            adGroupsTotal: number;
+            adsTotal: number;
+            keywordsTotal: number;
+            negativesTotal: number;
+            eventCount: number;
+          };
+          performance: { adGroupRows: number; keywordRows: number; adRows: number };
+        }>;
+      }>("POST", `/campaigns/${id}/structure/sync`, { body }),
+    changelogTree: (
+      id: string,
+      params: { workspaceId: string; from?: string; to?: string },
+    ) =>
+      request<ChangeEvent[]>("GET", `/campaigns/${id}/changelog-tree`, {
+        query: params,
+      }),
+  },
+
+  channelAdGroups: {
+    performance: (
+      id: string,
+      params: { workspaceId: string; from: string; to: string },
+    ) =>
+      request<PerformanceRow[]>("GET", `/channel-ad-groups/${id}/performance`, {
+        query: params,
+      }),
+  },
+
+  channelKeywords: {
+    performance: (
+      id: string,
+      params: { workspaceId: string; from: string; to: string },
+    ) =>
+      request<PerformanceRow[]>("GET", `/channel-keywords/${id}/performance`, {
+        query: params,
+      }),
+  },
+
+  channelAds: {
+    performance: (
+      id: string,
+      params: { workspaceId: string; from: string; to: string },
+    ) =>
+      request<PerformanceRow[]>("GET", `/channel-ads/${id}/performance`, {
+        query: params,
+      }),
   },
 
   initiatives: {

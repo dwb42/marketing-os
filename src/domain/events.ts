@@ -4,6 +4,9 @@
 export type SubjectType =
   | "CAMPAIGN"
   | "CHANNEL_CAMPAIGN"
+  | "CHANNEL_AD_GROUP"
+  | "CHANNEL_AD"
+  | "CHANNEL_KEYWORD"
   | "ASSET"
   | "ASSET_VERSION"
   | "INITIATIVE"

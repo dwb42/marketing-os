@@ -174,6 +174,7 @@ export function useDashboardData(
     });
   }
   for (const r of allRows) {
+    if (!r.channelCampaignId) continue;
     const t = ccpTotals.get(r.channelCampaignId);
     if (!t) continue;
     t.impressions += r.impressions;

@@ -255,7 +255,10 @@ export interface Annotation {
 
 export interface PerformanceRow {
   id: string;
-  channelCampaignId: string;
+  channelCampaignId?: string;
+  channelAdGroupId?: string;
+  channelKeywordId?: string;
+  channelAdId?: string;
   date: string;
   impressions: number;
   clicks: number;
@@ -265,6 +268,60 @@ export interface PerformanceRow {
   raw: Record<string, unknown>;
   pulledAt: string;
   syncRunId: string | null;
+}
+
+export interface ChannelStructureAd {
+  id: string;
+  externalId: string | null;
+  type: string;
+  status: string;
+  policyApprovalStatus: string | null;
+  headlines: Array<{ text: string; pinnedField: string | null }>;
+  descriptions: Array<{ text: string; pinnedField: string | null }>;
+  finalUrls: string[];
+  path1: string | null;
+  path2: string | null;
+  lastSyncedAt: string | null;
+}
+
+export interface ChannelStructureKeyword {
+  id: string;
+  externalId: string | null;
+  text: string;
+  matchType: string;
+  negative: boolean;
+  status: string;
+  cpcBidMicros: string | null;
+  lastSyncedAt: string | null;
+}
+
+export interface ChannelStructureAdGroup {
+  id: string;
+  externalId: string | null;
+  name: string;
+  status: string;
+  cpcBidMicros: string | null;
+  lastSyncedAt: string | null;
+  ads: ChannelStructureAd[];
+  keywords: ChannelStructureKeyword[];
+}
+
+export interface CampaignStructureChannel {
+  id: string;
+  channel: string;
+  externalId: string | null;
+  externalName: string | null;
+  status: string;
+  lastSyncedAt: string | null;
+  adGroups: ChannelStructureAdGroup[];
+  negatives: Array<{
+    id: string;
+    externalId: string | null;
+    text: string;
+    matchType: string;
+    status: string;
+    lastSyncedAt: string | null;
+  }>;
 }
 
 export interface OutcomeEvent {

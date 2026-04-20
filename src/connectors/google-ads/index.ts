@@ -4,10 +4,17 @@ import {
   ConnectionHandle,
   ConnectorError,
   IntegrationAccountRef,
+  LevelPerformancePullResult,
+  NormalizedLevelPerformanceRow,
   NormalizedPerformanceRow,
   PerformancePullResult,
   PullPerformanceInput,
+  PulledAd,
+  PulledAdGroup,
+  PulledKeyword,
+  PulledRsaAsset,
   PushCampaignInput,
+  StructurePullResult,
   SyncRunResult,
 } from "../types.js";
 import { refreshAccessToken, type GoogleAdsTokens } from "./auth.js";
@@ -16,6 +23,23 @@ const BASE = "https://googleads.googleapis.com/v23";
 
 function fmtDate(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+// Reads "adGroupAd.ad.id" etc from a nested JSON row returned by Google Ads.
+function readNestedString(
+  obj: Record<string, unknown>,
+  path: string,
+): string | null {
+  const parts = path.split(".");
+  let cur: unknown = obj;
+  for (const p of parts) {
+    if (cur && typeof cur === "object" && p in (cur as Record<string, unknown>)) {
+      cur = (cur as Record<string, unknown>)[p];
+    } else {
+      return null;
+    }
+  }
+  return cur == null ? null : String(cur);
 }
 
 function requireEnv(key: string): string {
@@ -359,6 +383,272 @@ export class GoogleAdsConnector implements ChannelConnector {
       },
       this.loginCustomerId,
     );
+  }
+
+  // ── Strukturelle Pulls ─────────────────────────────────────────
+
+  private async searchStream(
+    customerId: string,
+    query: string,
+  ): Promise<Array<Record<string, unknown>>> {
+    this.ensureAuthenticated();
+    const data = (await googleAdsRequest(
+      "POST",
+      `${BASE}/customers/${customerId}/googleAds:searchStream`,
+      this.accessToken!,
+      this.developerToken!,
+      { query },
+      this.loginCustomerId,
+    )) as Array<{ results?: Array<Record<string, unknown>> }>;
+    const rows: Array<Record<string, unknown>> = [];
+    for (const batch of data) {
+      if (batch.results) rows.push(...batch.results);
+    }
+    return rows;
+  }
+
+  async pullStructure(
+    customerId: string,
+    externalCampaignId: string,
+  ): Promise<StructurePullResult> {
+    // Ad Groups
+    const adGroupRows = await this.searchStream(
+      customerId,
+      `SELECT ad_group.id, ad_group.name, ad_group.status, ad_group.cpc_bid_micros ` +
+        `FROM ad_group ` +
+        `WHERE campaign.id = ${externalCampaignId} AND ad_group.status != 'REMOVED'`,
+    );
+    const adGroups: PulledAdGroup[] = [];
+    for (const row of adGroupRows) {
+      const ag = row.adGroup as
+        | { id?: string; name?: string; status?: string; cpcBidMicros?: string }
+        | undefined;
+      if (!ag?.id) continue;
+      adGroups.push({
+        externalId: String(ag.id),
+        name: ag.name ?? "",
+        status: ag.status ?? "UNKNOWN",
+        cpcBidMicros: ag.cpcBidMicros ?? null,
+        raw: row,
+      });
+    }
+
+    // Ads (RSA)
+    const adRows = await this.searchStream(
+      customerId,
+      `SELECT ad_group_ad.ad.id, ad_group_ad.ad.type, ad_group_ad.status, ` +
+        `ad_group_ad.policy_summary.approval_status, ` +
+        `ad_group_ad.ad.responsive_search_ad.headlines, ` +
+        `ad_group_ad.ad.responsive_search_ad.descriptions, ` +
+        `ad_group_ad.ad.responsive_search_ad.path1, ` +
+        `ad_group_ad.ad.responsive_search_ad.path2, ` +
+        `ad_group_ad.ad.final_urls, ad_group.id ` +
+        `FROM ad_group_ad ` +
+        `WHERE campaign.id = ${externalCampaignId} AND ad_group_ad.status != 'REMOVED'`,
+    );
+    const ads: PulledAd[] = [];
+    for (const row of adRows) {
+      const aga = row.adGroupAd as
+        | {
+            ad?: {
+              id?: string;
+              type?: string;
+              finalUrls?: string[];
+              responsiveSearchAd?: {
+                headlines?: Array<{ text?: string; pinnedField?: string | null }>;
+                descriptions?: Array<{ text?: string; pinnedField?: string | null }>;
+                path1?: string;
+                path2?: string;
+              };
+            };
+            status?: string;
+            policySummary?: { approvalStatus?: string };
+          }
+        | undefined;
+      const ag = row.adGroup as { id?: string } | undefined;
+      const ad = aga?.ad;
+      if (!ad?.id || !ag?.id) continue;
+      const rsa = ad.responsiveSearchAd;
+      const headlines: PulledRsaAsset[] = (rsa?.headlines ?? []).map((h) => ({
+        text: h.text ?? "",
+        pinnedField: h.pinnedField ?? null,
+      }));
+      const descriptions: PulledRsaAsset[] = (rsa?.descriptions ?? []).map((d) => ({
+        text: d.text ?? "",
+        pinnedField: d.pinnedField ?? null,
+      }));
+      ads.push({
+        externalId: String(ad.id),
+        externalAdGroupId: String(ag.id),
+        type: ad.type ?? "RESPONSIVE_SEARCH_AD",
+        status: aga?.status ?? "UNKNOWN",
+        policyApprovalStatus: aga?.policySummary?.approvalStatus ?? null,
+        headlines,
+        descriptions,
+        finalUrls: ad.finalUrls ?? [],
+        path1: rsa?.path1 ?? null,
+        path2: rsa?.path2 ?? null,
+        raw: row,
+      });
+    }
+
+    // AdGroup-Keywords (positiv + ad-group-level negatives)
+    const kwRows = await this.searchStream(
+      customerId,
+      `SELECT ad_group_criterion.criterion_id, ad_group_criterion.keyword.text, ` +
+        `ad_group_criterion.keyword.match_type, ad_group_criterion.status, ` +
+        `ad_group_criterion.cpc_bid_micros, ad_group_criterion.negative, ad_group.id ` +
+        `FROM ad_group_criterion ` +
+        `WHERE campaign.id = ${externalCampaignId} ` +
+        `AND ad_group_criterion.type = KEYWORD ` +
+        `AND ad_group_criterion.status != 'REMOVED'`,
+    );
+    const keywords: PulledKeyword[] = [];
+    for (const row of kwRows) {
+      const agc = row.adGroupCriterion as
+        | {
+            criterionId?: string;
+            status?: string;
+            cpcBidMicros?: string;
+            negative?: boolean;
+            keyword?: { text?: string; matchType?: string };
+          }
+        | undefined;
+      const ag = row.adGroup as { id?: string } | undefined;
+      if (!agc?.criterionId || !ag?.id || !agc.keyword?.text) continue;
+      keywords.push({
+        externalId: String(agc.criterionId),
+        externalAdGroupId: String(ag.id),
+        externalCampaignId: null,
+        text: agc.keyword.text,
+        matchType: agc.keyword.matchType ?? "PHRASE",
+        negative: Boolean(agc.negative),
+        status: agc.status ?? "UNKNOWN",
+        cpcBidMicros: agc.cpcBidMicros ?? null,
+        raw: row,
+      });
+    }
+
+    // Campaign-level Negatives
+    const negRows = await this.searchStream(
+      customerId,
+      `SELECT campaign_criterion.criterion_id, campaign_criterion.keyword.text, ` +
+        `campaign_criterion.keyword.match_type, campaign_criterion.status, ` +
+        `campaign_criterion.negative, campaign.id ` +
+        `FROM campaign_criterion ` +
+        `WHERE campaign.id = ${externalCampaignId} ` +
+        `AND campaign_criterion.type = KEYWORD ` +
+        `AND campaign_criterion.negative = TRUE`,
+    );
+    for (const row of negRows) {
+      const cc = row.campaignCriterion as
+        | {
+            criterionId?: string;
+            status?: string;
+            negative?: boolean;
+            keyword?: { text?: string; matchType?: string };
+          }
+        | undefined;
+      if (!cc?.criterionId || !cc.keyword?.text) continue;
+      keywords.push({
+        externalId: String(cc.criterionId),
+        externalAdGroupId: null,
+        externalCampaignId: externalCampaignId,
+        text: cc.keyword.text,
+        matchType: cc.keyword.matchType ?? "BROAD",
+        negative: true,
+        status: cc.status ?? "UNKNOWN",
+        cpcBidMicros: null,
+        raw: row,
+      });
+    }
+
+    return { adGroups, ads, keywords, pulledAt: new Date() };
+  }
+
+  private async pullLevelPerformance(
+    customerId: string,
+    externalCampaignId: string,
+    from: Date,
+    to: Date,
+    opts: {
+      fromResource: string;
+      entityIdField: string; // e.g. "adGroupCriterion.criterionId"
+      select: string;
+    },
+  ): Promise<LevelPerformancePullResult> {
+    const rows = await this.searchStream(
+      customerId,
+      `SELECT ${opts.select}, ad_group.id, ` +
+        `metrics.impressions, metrics.clicks, metrics.cost_micros, ` +
+        `metrics.conversions, metrics.conversions_value, segments.date ` +
+        `FROM ${opts.fromResource} ` +
+        `WHERE segments.date BETWEEN '${fmtDate(from)}' AND '${fmtDate(to)}' ` +
+        `AND campaign.id = ${externalCampaignId}`,
+    );
+    const out: NormalizedLevelPerformanceRow[] = [];
+    for (const row of rows) {
+      const metrics = row.metrics as Record<string, unknown> | undefined;
+      const segments = row.segments as { date?: string } | undefined;
+      if (!metrics || !segments?.date) continue;
+
+      const entityId = readNestedString(row, opts.entityIdField);
+      if (!entityId) continue;
+
+      const ag = row.adGroup as { id?: string } | undefined;
+
+      out.push({
+        entityExternalId: entityId,
+        externalAdGroupId: ag?.id ? String(ag.id) : undefined,
+        date: new Date(segments.date),
+        impressions: parseInt(String(metrics.impressions), 10) || 0,
+        clicks: parseInt(String(metrics.clicks), 10) || 0,
+        costMicros: BigInt(String(metrics.costMicros ?? "0")),
+        conversions: parseFloat(String(metrics.conversions)) || 0,
+        conversionValue: parseFloat(String(metrics.conversionsValue)) || 0,
+        raw: row,
+      });
+    }
+    return { rows: out, pulledAt: new Date() };
+  }
+
+  async pullAdGroupPerformance(
+    customerId: string,
+    externalCampaignId: string,
+    from: Date,
+    to: Date,
+  ): Promise<LevelPerformancePullResult> {
+    return this.pullLevelPerformance(customerId, externalCampaignId, from, to, {
+      fromResource: "ad_group",
+      entityIdField: "adGroup.id",
+      select: "ad_group.id",
+    });
+  }
+
+  async pullKeywordPerformance(
+    customerId: string,
+    externalCampaignId: string,
+    from: Date,
+    to: Date,
+  ): Promise<LevelPerformancePullResult> {
+    return this.pullLevelPerformance(customerId, externalCampaignId, from, to, {
+      fromResource: "keyword_view",
+      entityIdField: "adGroupCriterion.criterionId",
+      select: "ad_group_criterion.criterion_id",
+    });
+  }
+
+  async pullAdPerformance(
+    customerId: string,
+    externalCampaignId: string,
+    from: Date,
+    to: Date,
+  ): Promise<LevelPerformancePullResult> {
+    return this.pullLevelPerformance(customerId, externalCampaignId, from, to, {
+      fromResource: "ad_group_ad",
+      entityIdField: "adGroupAd.ad.id",
+      select: "ad_group_ad.ad.id",
+    });
   }
 
   private ensureAuthenticated(): void {

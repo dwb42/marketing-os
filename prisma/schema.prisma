@@ -28,23 +28,23 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  brands               Brand[]
-  products             Product[]
-  initiatives          Initiative[]
-  campaigns            Campaign[]
-  assets               Asset[]
-  integrationAccounts  IntegrationAccount[]
-  channelConnections   ChannelConnection[]
-  changeEvents         ChangeEvent[]
-  approvals            Approval[]
-  annotations          Annotation[]
-  syncRuns             SyncRun[]
-  learnings            Learning[]
-  experiments          Experiment[]
-  hypotheses           Hypothesis[]
-  audienceSegments     AudienceSegment[]
-  clusters             IntentCluster[]
-  findings             Finding[]
+  brands              Brand[]
+  products            Product[]
+  initiatives         Initiative[]
+  campaigns           Campaign[]
+  assets              Asset[]
+  integrationAccounts IntegrationAccount[]
+  channelConnections  ChannelConnection[]
+  changeEvents        ChangeEvent[]
+  approvals           Approval[]
+  annotations         Annotation[]
+  syncRuns            SyncRun[]
+  learnings           Learning[]
+  experiments         Experiment[]
+  hypotheses          Hypothesis[]
+  audienceSegments    AudienceSegment[]
+  clusters            IntentCluster[]
+  findings            Finding[]
 }
 
 model Brand {
@@ -96,8 +96,8 @@ model AudienceSegment {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
   campaigns Campaign[]
 
   @@index([workspaceId])
@@ -105,11 +105,11 @@ model AudienceSegment {
 }
 
 model Actor {
-  id        String   @id
+  id        String    @id
   type      ActorType
-  handle    String   @unique
+  handle    String    @unique
   agentRole String?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 }
 
 enum ActorType {
@@ -141,12 +141,12 @@ model Initiative {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
-  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  hypotheses  Hypothesis[]
-  campaigns   Campaign[]
-  learnings   Learning[]
-  clusters    IntentCluster[]
-  findings    Finding[]
+  workspace  Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  hypotheses Hypothesis[]
+  campaigns  Campaign[]
+  learnings  Learning[]
+  clusters   IntentCluster[]
+  findings   Finding[]
 
   @@index([workspaceId, status])
 }
@@ -178,17 +178,17 @@ model Hypothesis {
 }
 
 model Experiment {
-  id            String           @id
-  workspaceId   String
-  hypothesisId  String?
-  title         String
-  description   String?
-  status        ExperimentStatus @default(DESIGN)
-  startedAt     DateTime?
-  endedAt       DateTime?
-  conclusion    String?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  id           String           @id
+  workspaceId  String
+  hypothesisId String?
+  title        String
+  description  String?
+  status       ExperimentStatus @default(DESIGN)
+  startedAt    DateTime?
+  endedAt      DateTime?
+  conclusion   String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
   workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   hypothesis Hypothesis? @relation(fields: [hypothesisId], references: [id], onDelete: SetNull)
@@ -206,17 +206,17 @@ enum ExperimentStatus {
 }
 
 model Learning {
-  id            String              @id
-  workspaceId   String
-  initiativeId  String?
-  hypothesisId  String?
-  experimentId  String?
-  statement     String
-  confidence    LearningConfidence  @default(MEDIUM)
-  evidence      Json                @default("[]")
-  validUntil    DateTime?
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  id           String             @id
+  workspaceId  String
+  initiativeId String?
+  hypothesisId String?
+  experimentId String?
+  statement    String
+  confidence   LearningConfidence @default(MEDIUM)
+  evidence     Json               @default("[]")
+  validUntil   DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
 
   workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   initiative Initiative? @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
@@ -238,18 +238,18 @@ enum LearningConfidence {
 // ────────────────────────────────────────────────────────────────────
 
 model Campaign {
-  id                String          @id
+  id                String         @id
   workspaceId       String
   productId         String
   initiativeId      String?
   audienceSegmentId String?
   name              String
   objective         String
-  status            CampaignStatus  @default(DRAFT)
+  status            CampaignStatus @default(DRAFT)
   startsAt          DateTime?
   endsAt            DateTime?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
   createdByActorId  String?
 
   workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -274,7 +274,7 @@ enum CampaignStatus {
 }
 
 model ChannelCampaign {
-  id                  String    @id
+  id                  String         @id
   workspaceId         String
   campaignId          String
   channel             ChannelId
@@ -283,12 +283,13 @@ model ChannelCampaign {
   externalName        String?
   status              CampaignStatus @default(DRAFT)
   lastSyncedAt        DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
 
-  campaign          Campaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  channelConnection ChannelConnection? @relation(fields: [channelConnectionId], references: [id], onDelete: SetNull)
+  campaign          Campaign                   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  channelConnection ChannelConnection?         @relation(fields: [channelConnectionId], references: [id], onDelete: SetNull)
   adGroups          ChannelAdGroup[]
+  negatives         ChannelKeyword[]           @relation("CampaignNegatives")
   performance       PerformanceSnapshotDaily[]
 
   @@unique([channel, externalId])
@@ -297,15 +298,72 @@ model ChannelCampaign {
 }
 
 model ChannelAdGroup {
-  id                String   @id
+  id                String    @id
   channelCampaignId String
   externalId        String?
   name              String
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  status            String    @default("UNKNOWN")
+  cpcBidMicros      BigInt?
+  lastSyncedAt      DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  channelCampaign ChannelCampaign @relation(fields: [channelCampaignId], references: [id], onDelete: Cascade)
+  channelCampaign ChannelCampaign           @relation(fields: [channelCampaignId], references: [id], onDelete: Cascade)
+  ads             ChannelAd[]
+  keywords        ChannelKeyword[]          @relation("AdGroupKeywords")
+  performance     AdGroupPerformanceDaily[]
 
+  @@unique([channelCampaignId, externalId])
+  @@index([channelCampaignId])
+}
+
+model ChannelAd {
+  id                   String    @id
+  channelAdGroupId     String
+  externalId           String?
+  type                 String    @default("RESPONSIVE_SEARCH_AD")
+  status               String    @default("UNKNOWN")
+  headlines            Json      @default("[]")
+  descriptions         Json      @default("[]")
+  finalUrls            Json      @default("[]")
+  path1                String?
+  path2                String?
+  policyApprovalStatus String?
+  lastSyncedAt         DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  channelAdGroup ChannelAdGroup       @relation(fields: [channelAdGroupId], references: [id], onDelete: Cascade)
+  performance    AdPerformanceDaily[]
+
+  @@unique([channelAdGroupId, externalId])
+  @@index([channelAdGroupId])
+}
+
+// Keyword — entweder an eine AdGroup (positiv oder ad-group-level negative)
+// oder an eine ChannelCampaign (ausschliesslich campaign-level negative) gebunden.
+// Genau eines von channelAdGroupId/channelCampaignId ist gesetzt (Invariante im Service).
+model ChannelKeyword {
+  id                String    @id
+  channelAdGroupId  String?
+  channelCampaignId String?
+  externalId        String?
+  text              String
+  matchType         String    @default("PHRASE")
+  negative          Boolean   @default(false)
+  status            String    @default("UNKNOWN")
+  cpcBidMicros      BigInt?
+  lastSyncedAt      DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  channelAdGroup  ChannelAdGroup?           @relation("AdGroupKeywords", fields: [channelAdGroupId], references: [id], onDelete: Cascade)
+  channelCampaign ChannelCampaign?          @relation("CampaignNegatives", fields: [channelCampaignId], references: [id], onDelete: Cascade)
+  performance     KeywordPerformanceDaily[]
+
+  @@unique([channelAdGroupId, externalId])
+  @@unique([channelCampaignId, externalId])
+  @@index([channelAdGroupId])
   @@index([channelCampaignId])
 }
 
@@ -340,15 +398,15 @@ enum AssetKind {
 }
 
 model AssetVersion {
-  id           String              @id
-  assetId      String
-  versionNum   Int
-  status       AssetVersionStatus  @default(DRAFT)
-  content      Json
-  contentHash  String
+  id            String             @id
+  assetId       String
+  versionNum    Int
+  status        AssetVersionStatus @default(DRAFT)
+  content       Json
+  contentHash   String
   authorActorId String?
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
@@ -404,22 +462,22 @@ enum ApprovalDecision {
 }
 
 model SyncRun {
-  id              String         @id
-  workspaceId     String
-  channel         ChannelId
-  type            SyncRunType
-  targetType      String
-  targetId        String
-  status          SyncRunStatus  @default(PENDING)
-  idempotencyKey  String
-  input           Json
-  output          Json?
-  errorKind       String?
-  errorMessage    String?
-  attempt         Int            @default(0)
-  startedAt       DateTime?
-  finishedAt      DateTime?
-  createdAt       DateTime       @default(now())
+  id             String        @id
+  workspaceId    String
+  channel        ChannelId
+  type           SyncRunType
+  targetType     String
+  targetId       String
+  status         SyncRunStatus @default(PENDING)
+  idempotencyKey String
+  input          Json
+  output         Json?
+  errorKind      String?
+  errorMessage   String?
+  attempt        Int           @default(0)
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime      @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -443,16 +501,16 @@ enum SyncRunStatus {
 }
 
 model ChangeEvent {
-  id           String   @id
-  workspaceId  String
-  subjectType  String
-  subjectId    String
-  actorId      String?
-  kind         String
-  summary      String
-  payload      Json     @default("{}")
-  correctsId   String?
-  at           DateTime @default(now())
+  id          String   @id
+  workspaceId String
+  subjectType String
+  subjectId   String
+  actorId     String?
+  kind        String
+  summary     String
+  payload     Json     @default("{}")
+  correctsId  String?
+  at          DateTime @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -482,15 +540,15 @@ model Annotation {
 // ────────────────────────────────────────────────────────────────────
 
 model IntegrationAccount {
-  id          String    @id
+  id          String            @id
   workspaceId String
   channel     ChannelId
   label       String
   externalId  String
   credentials Json
   status      IntegrationStatus @default(ACTIVE)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   workspace   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   connections ChannelConnection[]
@@ -544,23 +602,80 @@ model PerformanceSnapshotDaily {
   @@index([date])
 }
 
+model AdGroupPerformanceDaily {
+  id               String   @id
+  channelAdGroupId String
+  date             DateTime @db.Date
+  impressions      Int      @default(0)
+  clicks           Int      @default(0)
+  costMicros       BigInt   @default(0)
+  conversions      Decimal  @default(0) @db.Decimal(14, 4)
+  conversionValue  Decimal  @default(0) @db.Decimal(14, 4)
+  raw              Json     @default("{}")
+  pulledAt         DateTime @default(now())
+  syncRunId        String?
+
+  channelAdGroup ChannelAdGroup @relation(fields: [channelAdGroupId], references: [id], onDelete: Cascade)
+
+  @@unique([channelAdGroupId, date])
+  @@index([date])
+}
+
+model KeywordPerformanceDaily {
+  id               String   @id
+  channelKeywordId String
+  date             DateTime @db.Date
+  impressions      Int      @default(0)
+  clicks           Int      @default(0)
+  costMicros       BigInt   @default(0)
+  conversions      Decimal  @default(0) @db.Decimal(14, 4)
+  conversionValue  Decimal  @default(0) @db.Decimal(14, 4)
+  raw              Json     @default("{}")
+  pulledAt         DateTime @default(now())
+  syncRunId        String?
+
+  channelKeyword ChannelKeyword @relation(fields: [channelKeywordId], references: [id], onDelete: Cascade)
+
+  @@unique([channelKeywordId, date])
+  @@index([date])
+}
+
+model AdPerformanceDaily {
+  id              String   @id
+  channelAdId     String
+  date            DateTime @db.Date
+  impressions     Int      @default(0)
+  clicks          Int      @default(0)
+  costMicros      BigInt   @default(0)
+  conversions     Decimal  @default(0) @db.Decimal(14, 4)
+  conversionValue Decimal  @default(0) @db.Decimal(14, 4)
+  raw             Json     @default("{}")
+  pulledAt        DateTime @default(now())
+  syncRunId       String?
+
+  channelAd ChannelAd @relation(fields: [channelAdId], references: [id], onDelete: Cascade)
+
+  @@unique([channelAdId, date])
+  @@index([date])
+}
+
 model ProductOutcomeEvent {
-  id           String   @id
-  productId    String
-  type         String
-  occurredAt   DateTime
-  sessionRef   String?
-  attribution  Json     @default("{}")
-  payload      Json     @default("{}")
-  ingestedAt   DateTime @default(now())
+  id          String    @id
+  productId   String
+  type        String
+  occurredAt  DateTime
+  sessionRef  String?
+  attribution Json      @default("{}")
+  payload     Json      @default("{}")
+  ingestedAt  DateTime  @default(now())
   // Populated when an AttributionMatch claimed this event as its
   // matched cta_click. Used by the matcher to exclude already-matched
   // candidates. A partial index on (productId, occurredAt) WHERE
   // matchedAt IS NULL AND type='cta_click' is added via raw SQL in
   // the migration — Prisma schema cannot express partial indexes.
-  matchedAt    DateTime?
+  matchedAt   DateTime?
 
-  product          Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product          Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
   attributionMatch AttributionMatch?
 
   @@index([productId, type, occurredAt])
@@ -571,16 +686,16 @@ model ProductOutcomeEvent {
 // of whether it succeeded. One row per POST /attribution/match call.
 // confidence ∈ {confirmed, ambiguous, unattributed}.
 model AttributionMatch {
-  id                 String   @id
-  productId          String
-  messageHash        String
-  senderHash         String
-  occurredAt         DateTime
-  sessionRef         String?
-  confidence         String
+  id                    String   @id
+  productId             String
+  messageHash           String
+  senderHash            String
+  occurredAt            DateTime
+  sessionRef            String?
+  confidence            String
   matchedOutcomeEventId String?  @unique
-  candidateCount     Int
-  createdAt          DateTime @default(now())
+  candidateCount        Int
+  createdAt             DateTime @default(now())
 
   product             Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
   matchedOutcomeEvent ProductOutcomeEvent? @relation(fields: [matchedOutcomeEventId], references: [id], onDelete: SetNull)
@@ -612,10 +727,10 @@ model IntentCluster {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
-  workspace       Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  product         Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
-  initiative      Initiative?  @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
-  findings        Finding[]
+  workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  initiative Initiative? @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
+  findings   Finding[]
 
   @@index([workspaceId, status])
   @@index([productId])
@@ -637,26 +752,26 @@ enum ClusterValidation {
 }
 
 model Finding {
-  id                String            @id
-  workspaceId       String
-  initiativeId      String?
-  clusterId         String?
-  modulBetroffen    String?
-  outcomeBetroffen  String?
-  beobachtung       String
-  interpretation    String
-  konfidenz         FindingConfidence @default(LOW)
-  konfidenzGrund    String?
-  empfehlung        String
-  empfehlungAn      String?
-  datenLuecke       String?
-  status            FindingStatus     @default(OPEN)
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  id               String            @id
+  workspaceId      String
+  initiativeId     String?
+  clusterId        String?
+  modulBetroffen   String?
+  outcomeBetroffen String?
+  beobachtung      String
+  interpretation   String
+  konfidenz        FindingConfidence @default(LOW)
+  konfidenzGrund   String?
+  empfehlung       String
+  empfehlungAn     String?
+  datenLuecke      String?
+  status           FindingStatus     @default(OPEN)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
-  workspace         Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  initiative        Initiative?    @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
-  cluster           IntentCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  workspace  Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  initiative Initiative?    @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
+  cluster    IntentCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, status])
   @@index([initiativeId])

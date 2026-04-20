@@ -18,6 +18,7 @@ import { AssetDiffViewer } from "@/components/assets/asset-diff-viewer";
 import { CampaignActions } from "@/components/campaigns/campaign-actions";
 import { CampaignReviewPanel } from "@/components/campaigns/campaign-review-panel";
 import { CampaignOutcomesTab } from "@/components/campaigns/campaign-outcomes-tab";
+import { CampaignStructureTab } from "@/components/campaigns/campaign-structure-tab";
 import { AddAnnotationButton } from "@/components/annotations/add-annotation-button";
 import { AnnotationRow, EventRow } from "@/components/activity/timeline-rows";
 import { useState } from "react";
@@ -59,13 +60,8 @@ export function CampaignDetail({
   });
 
   const changelogQ = useQuery({
-    queryKey: ["changelog-for-campaign", campaignId, workspaceId],
-    queryFn: () =>
-      api.changelog.query({
-        workspaceId,
-        subjectType: "CAMPAIGN",
-        subjectId: campaignId,
-      }),
+    queryKey: ["changelog-tree", campaignId, workspaceId],
+    queryFn: () => api.campaigns.changelogTree(campaignId, { workspaceId }),
     enabled: !!workspaceId,
   });
 
@@ -199,6 +195,7 @@ export function CampaignDetail({
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">Übersicht</TabsTrigger>
+          <TabsTrigger value="structure">Struktur</TabsTrigger>
           <TabsTrigger value="performance">Performance</TabsTrigger>
           <TabsTrigger value="outcomes">Outcomes</TabsTrigger>
           <TabsTrigger value="assets">Assets</TabsTrigger>
@@ -266,6 +263,10 @@ export function CampaignDetail({
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="structure">
+          <CampaignStructureTab campaignId={campaignId} workspaceId={workspaceId} />
         </TabsContent>
 
         <TabsContent value="performance">

@@ -40,6 +40,71 @@ export interface PerformancePullResult {
   pulledAt: Date;
 }
 
+// ── Strukturelle Pulls (AdGroups, Ads, Keywords, Negatives) ──
+
+export interface PulledAdGroup {
+  externalId: string;
+  name: string;
+  status: string;
+  cpcBidMicros: string | null;
+  raw: Record<string, unknown>;
+}
+
+export interface PulledRsaAsset {
+  text: string;
+  pinnedField: string | null;
+}
+
+export interface PulledAd {
+  externalId: string;
+  externalAdGroupId: string;
+  type: string;
+  status: string;
+  policyApprovalStatus: string | null;
+  headlines: PulledRsaAsset[];
+  descriptions: PulledRsaAsset[];
+  finalUrls: string[];
+  path1: string | null;
+  path2: string | null;
+  raw: Record<string, unknown>;
+}
+
+export interface PulledKeyword {
+  externalId: string;
+  externalAdGroupId: string | null; // null ⇔ campaign-level negative
+  externalCampaignId: string | null; // null ⇔ ad-group-scoped
+  text: string;
+  matchType: string;
+  negative: boolean;
+  status: string;
+  cpcBidMicros: string | null;
+  raw: Record<string, unknown>;
+}
+
+export interface StructurePullResult {
+  adGroups: PulledAdGroup[];
+  ads: PulledAd[];
+  keywords: PulledKeyword[];
+  pulledAt: Date;
+}
+
+export interface NormalizedLevelPerformanceRow {
+  entityExternalId: string;
+  externalAdGroupId?: string;
+  date: Date;
+  impressions: number;
+  clicks: number;
+  costMicros: bigint;
+  conversions: number;
+  conversionValue: number;
+  raw: Record<string, unknown>;
+}
+
+export interface LevelPerformancePullResult {
+  rows: NormalizedLevelPerformanceRow[];
+  pulledAt: Date;
+}
+
 export interface PushCampaignInput {
   connection: ConnectionHandle;
   internalCampaignId: string;
