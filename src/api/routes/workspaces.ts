@@ -58,4 +58,22 @@ export async function registerWorkspaceRoutes(app: FastifyInstance): Promise<voi
     const body = CreateAudienceSchema.parse(req.body);
     return workspaceService.createAudienceSegment(body);
   });
+
+  app.get("/brands", async (req) => {
+    const q = z.object({ workspaceId: WorkspaceIdSchema }).parse(req.query);
+    return workspaceService.listBrands(q.workspaceId);
+  });
+
+  app.get("/audience-segments", async (req) => {
+    const q = z
+      .object({
+        workspaceId: WorkspaceIdSchema,
+        productId: ProductIdSchema.optional(),
+      })
+      .parse(req.query);
+    return workspaceService.listAudienceSegments(
+      q.workspaceId,
+      q.productId,
+    );
+  });
 }

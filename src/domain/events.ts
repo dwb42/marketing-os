@@ -18,7 +18,8 @@ export type SubjectType =
   | "INTENT_CLUSTER"
   | "FINDING"
   | "PLATFORM"
-  | "PROPOSAL";
+  | "PROPOSAL"
+  | "ANNOTATION";
 
 export interface ChangeEventInput {
   workspaceId: string;

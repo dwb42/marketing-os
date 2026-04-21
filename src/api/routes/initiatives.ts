@@ -1,7 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { initiativeService } from "../../services/initiative.service.js";
-import { CreateInitiativeSchema, InitiativeIdSchema, WorkspaceIdSchema } from "../schemas.js";
+import {
+  ActorReasonBody,
+  CreateInitiativeSchema,
+  InitiativeIdSchema,
+  PatchInitiativeSchema,
+  WorkspaceIdSchema,
+} from "../schemas.js";
 
 const InitiativeStatusSchema = z.enum([
   "PROPOSED",
@@ -34,6 +40,44 @@ export async function registerInitiativeRoutes(app: FastifyInstance): Promise<vo
     const p = z.object({ id: InitiativeIdSchema }).parse(req.params);
     const q = z.object({ workspaceId: WorkspaceIdSchema }).parse(req.query);
     return initiativeService.get(q.workspaceId, p.id);
+  });
+
+  app.patch("/initiatives/:id", async (req) => {
+    const p = z.object({ id: InitiativeIdSchema }).parse(req.params);
+    const q = z.object({ workspaceId: WorkspaceIdSchema }).parse(req.query);
+    const body = PatchInitiativeSchema.parse(req.body);
+    const { actorId, reason, ...patch } = body;
+    return initiativeService.update({
+      workspaceId: q.workspaceId,
+      id: p.id,
+      patch,
+      ...(actorId !== undefined ? { actorId } : {}),
+      ...(reason !== undefined ? { reason } : {}),
+    });
+  });
+
+  app.post("/initiatives/:id/archive", async (req) => {
+    const p = z.object({ id: InitiativeIdSchema }).parse(req.params);
+    const body = ActorReasonBody.parse(req.body);
+    return initiativeService.archive(body.workspaceId, p.id, body.actorId, body.reason);
+  });
+
+  app.post("/initiatives/:id/restore", async (req) => {
+    const p = z.object({ id: InitiativeIdSchema }).parse(req.params);
+    const body = ActorReasonBody.parse(req.body);
+    return initiativeService.restore(body.workspaceId, p.id, body.actorId, body.reason);
+  });
+
+  app.delete("/initiatives/:id", async (req) => {
+    const p = z.object({ id: InitiativeIdSchema }).parse(req.params);
+    const q = ActorReasonBody.parse(req.query);
+    const result = await initiativeService.delete({
+      workspaceId: q.workspaceId,
+      id: p.id,
+      ...(q.actorId !== undefined ? { actorId: q.actorId } : {}),
+      ...(q.reason !== undefined ? { reason: q.reason } : {}),
+    });
+    return { ok: true, ...result };
   });
 
   app.get("/initiatives/:id/timeline", async (req) => {

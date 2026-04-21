@@ -70,6 +70,17 @@ export class WorkspaceService {
     });
   }
 
+  async listBrands(workspaceId: string) {
+    return prisma.brand.findMany({ where: { workspaceId }, orderBy: { createdAt: "asc" } });
+  }
+
+  async listAudienceSegments(workspaceId: string, productId?: string) {
+    return prisma.audienceSegment.findMany({
+      where: { workspaceId, ...(productId ? { productId } : {}) },
+      orderBy: { createdAt: "asc" },
+    });
+  }
+
   async getWorkspaceBySlug(slug: string) {
     const w = await prisma.workspace.findUnique({ where: { slug } });
     if (!w) throw notFound("Workspace", slug);

@@ -1,6 +1,6 @@
 import { prisma } from "./prisma.js";
 import { newId } from "../lib/ids.js";
-import { notFound } from "../lib/errors.js";
+import { invalidInput, notFound } from "../lib/errors.js";
 import { changeEventService } from "./change-event.service.js";
 
 // Agenten können Verbesserungsvorschläge zur Plattform selbst einreichen.
@@ -51,6 +51,79 @@ export class ProposalService {
       },
       orderBy: { at: "desc" },
     });
+  }
+
+  async update(params: {
+    workspaceId: string;
+    proposalId: string;
+    patch: { title?: string; rationale?: string; impact?: string | null; examples?: string[] };
+    actorId?: string;
+    reason?: string;
+  }) {
+    const existing = await prisma.changeEvent.findFirst({
+      where: {
+        id: params.proposalId,
+        workspaceId: params.workspaceId,
+        subjectType: "PLATFORM",
+        kind: "proposal.submitted",
+      },
+    });
+    if (!existing) throw notFound("Proposal", params.proposalId);
+    const payload = (existing.payload as Record<string, unknown>) ?? {};
+    const data: Record<string, unknown> = { ...payload };
+    const touched: string[] = [];
+    if (params.patch.title !== undefined) {
+      touched.push("title");
+    }
+    if (params.patch.rationale !== undefined) {
+      data.rationale = params.patch.rationale;
+      touched.push("rationale");
+    }
+    if (params.patch.impact !== undefined) {
+      data.impact = params.patch.impact;
+      touched.push("impact");
+    }
+    if (params.patch.examples !== undefined) {
+      data.examples = params.patch.examples;
+      touched.push("examples");
+    }
+    if (touched.length === 0) {
+      throw invalidInput("PATCH body must contain at least one mutable field");
+    }
+
+    const before = {
+      title: existing.summary,
+      rationale: payload.rationale,
+      impact: payload.impact,
+      examples: payload.examples,
+    };
+    const updated = await prisma.changeEvent.update({
+      where: { id: params.proposalId },
+      data: {
+        ...(params.patch.title !== undefined ? { summary: params.patch.title } : {}),
+        payload: data as object,
+      },
+    });
+    await changeEventService.append({
+      workspaceId: params.workspaceId,
+      subjectType: "PLATFORM",
+      subjectId: existing.subjectId,
+      actorId: params.actorId,
+      kind: "proposal.patched",
+      summary: `Proposal patched (${touched.join(", ")})`,
+      payload: {
+        proposalId: params.proposalId,
+        before,
+        after: {
+          title: updated.summary,
+          rationale: (updated.payload as Record<string, unknown>).rationale,
+          impact: (updated.payload as Record<string, unknown>).impact,
+          examples: (updated.payload as Record<string, unknown>).examples,
+        },
+        reason: params.reason ?? null,
+      },
+    });
+    return updated;
   }
 
   async delete(params: {

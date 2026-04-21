@@ -40,7 +40,10 @@ Zwei Modi, abhängig von `MOS_TOKENS`:
 { "workspaceId": "wsp_…", "brandId": "brd_…", "slug": "pflegemax-core", "name": "Pflegemax — Digitale Pflegeberatung", "description": "…" }
 ```
 
-### `GET /workspaces` · `GET /products?workspaceId=…`
+### `GET /workspaces` · `GET /products?workspaceId=…` · `GET /brands?workspaceId=…`
+
+### `GET /audience-segments?workspaceId=…&productId=…`
+Global-Listing aller `AudienceSegment`s im Workspace, optional auf ein Produkt gefiltert.
 
 ### `POST /audience-segments`
 ```json
@@ -66,6 +69,27 @@ Zwei Modi, abhängig von `MOS_TOKENS`:
 }
 ```
 Alle neuen Felder sind optional.
+
+### `GET /initiatives?workspaceId=…&status=…`
+Globales Listing.
+
+### `GET /initiatives/:id?workspaceId=…`
+
+### `PATCH /initiatives/:id?workspaceId=…`
+```json
+{ "title": "…", "goal": "…", "hypothesis": "…|null", "modules": ["…"], "outcomeLadder": ["…"], "learnQuestions": ["…"], "assumptions": ["…"], "risks": ["…"], "successCriteria": "…|null", "startsAt": "2026-…|null", "endsAt": "2026-…|null", "metadata": { … }, "actorId": "act_…", "reason": "…" }
+```
+Mindestens ein Feld Pflicht. ChangeEvent `initiative.patched` mit before/after.
+
+### `POST /initiatives/:id/archive`
+### `POST /initiatives/:id/restore`
+```json
+{ "workspaceId": "wsp_…", "actorId": "act_…", "reason": "…" }
+```
+Soft-Archive via `status = ON_HOLD` bzw. restore → `ACTIVE`. Restore verlangt aktuellen Status `ON_HOLD` (sonst `INVALID_STATE`). ChangeEvents: `initiative.archived` / `initiative.restored`.
+
+### `DELETE /initiatives/:id?workspaceId=…&actorId=…&reason=…`
+Hard-Delete. Verweigert mit 409 `INVALID_STATE`, wenn noch Campaigns / Clusters / Findings / Hypotheses / Learnings auf die Initiative zeigen — `details.blockers` zeigt die Zählung. ChangeEvent `initiative.deleted` mit `correctsId`.
 
 ### `GET /initiatives/:id/timeline?workspaceId=…`
 Liefert einen kombinierten Stream aus ChangeEvents, Annotations, Performance und verknüpften Campaigns/Hypotheses/Learnings.
@@ -133,6 +157,30 @@ Strukturierter Key-by-Key-Diff zwischen zwei AssetVersions.
 { "workspaceId": "wsp_…", "to": "APPROVED" }
 ```
 
+### `GET /assets?workspaceId=…&kind=…&search=…&hasNoVersion=true`
+Globales Listing aller Assets im Workspace. `kind` filtert auf einen Asset-Typ, `search` macht ILIKE auf Name+Description, `hasNoVersion=true` listet Assets ohne jede Version. Jedes Ergebnis enthält `_count` (Versionen, Campaign-Links) und die jüngste Version.
+
+### `GET /assets/:id?workspaceId=…`
+Einzel-Asset inkl. aller Versionen.
+
+### `PATCH /assets/:id?workspaceId=…`
+```json
+{ "name": "…", "description": "…|null", "actorId": "act_…", "reason": "…" }
+```
+Edit von Name / Beschreibung. `kind` bleibt immutable. ChangeEvent `asset.patched`.
+
+### `DELETE /assets/:id?workspaceId=…&actorId=…&reason=…`
+Hard-Delete. Verweigert mit 409 `INVALID_STATE`, wenn das Asset an mindestens einer **nicht-ARCHIVED** Campaign hängt — `details.blockingCampaigns` listet die Blocker. Sonst: Cascade entfernt AssetVersions + CampaignAsset-Links. `asset.deleted`-ChangeEvent bleibt als Audit mit `correctsId=assetId`.
+
+### `POST /assets/versions/:vid/patch`
+```json
+{ "workspaceId": "wsp_…", "content": { … }, "actorId": "act_…", "reason": "micro-edit vor IN_REVIEW" }
+```
+Überschreibt `content` in-place. Nur im Status **DRAFT** erlaubt. `contentHash` wird neu berechnet. ChangeEvent `asset_version.patched`.
+
+### `DELETE /assets/versions/:vid?workspaceId=…&actorId=…&reason=…`
+Hard-Delete einer einzelnen Version. Nur im Status **DRAFT** oder **SUPERSEDED** erlaubt — `APPROVED`/`PUBLISHED` bleiben ewig. ChangeEvent `asset_version.deleted` mit `correctsId`.
+
 ## Approvals
 
 ### `POST /approvals`
@@ -180,6 +228,17 @@ Strukturierter Key-by-Key-Diff zwischen zwei AssetVersions.
 ```json
 { "workspaceId": "wsp_…", "subjectType": "CAMPAIGN", "subjectId": "cmp_…", "body": "Variant A live seit 14:00", "occurredAt": "2026-04-15T14:00:00Z", "pinned": true }
 ```
+
+### `GET /annotations?workspaceId=…&subjectType=…&subjectId=…&pinned=true`
+### `GET /annotations/:id?workspaceId=…`
+### `PATCH /annotations/:id?workspaceId=…`
+```json
+{ "body": "…", "pinned": true, "occurredAt": "2026-…", "actorId": "act_…", "reason": "…" }
+```
+ChangeEvent `annotation.patched`.
+
+### `DELETE /annotations/:id?workspaceId=…&actorId=…&reason=…`
+Hard-Delete; bleibt als `annotation.deleted`-ChangeEvent mit `correctsId` + Body-Snapshot stehen.
 
 ## Outcomes
 
@@ -258,6 +317,12 @@ Antwort: `{ "id": "syn_…", "reused": false }`. Idempotent über `(workspaceId,
 ```
 
 ### `GET /proposals?workspaceId=…&area=data_model`
+
+### `PATCH /proposals/:id?workspaceId=…`
+```json
+{ "title": "…", "rationale": "…", "impact": "…|null", "examples": ["…"], "actorId": "act_…", "reason": "…" }
+```
+`area` bleibt immutable. ChangeEvent `proposal.patched`.
 
 ### `DELETE /proposals/:id?workspaceId=…&actorId=…&reason=…`
 Hard-Delete eines Proposal-Eintrags (intern `ChangeEvent subjectType=PLATFORM kind=proposal.submitted`). Sinn: Smoke-Test-Einträge aufräumen. Wird durch eine `proposal.deleted`-ChangeEvent ersetzt, die `correctsId` auf die gelöschte Proposal-ID setzt und `originalSummary`/`originalPayload` im Payload konserviert. Response: `{ ok: true, deleted: true, correctsId: "chg_…" }`.

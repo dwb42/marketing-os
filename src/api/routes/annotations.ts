@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { annotationService } from "../../services/annotation.service.js";
-import { WorkspaceIdSchema } from "../schemas.js";
+import { ActorReasonBody, PatchAnnotationSchema, WorkspaceIdSchema } from "../schemas.js";
 
 const CreateAnnotationSchema = z.object({
   workspaceId: WorkspaceIdSchema,
@@ -42,5 +42,37 @@ export async function registerAnnotationRoutes(app: FastifyInstance): Promise<vo
       ...(q.pinned !== undefined ? { pinned: q.pinned } : {}),
       ...(q.subjectType ? { subjectType: q.subjectType } : {}),
     });
+  });
+
+  app.get("/annotations/:id", async (req) => {
+    const p = z.object({ id: z.string().startsWith("ann_") }).parse(req.params);
+    const q = z.object({ workspaceId: WorkspaceIdSchema }).parse(req.query);
+    return annotationService.get(q.workspaceId, p.id);
+  });
+
+  app.patch("/annotations/:id", async (req) => {
+    const p = z.object({ id: z.string().startsWith("ann_") }).parse(req.params);
+    const q = z.object({ workspaceId: WorkspaceIdSchema }).parse(req.query);
+    const body = PatchAnnotationSchema.parse(req.body);
+    const { actorId, reason, ...patch } = body;
+    return annotationService.update({
+      workspaceId: q.workspaceId,
+      id: p.id,
+      patch,
+      ...(actorId !== undefined ? { actorId } : {}),
+      ...(reason !== undefined ? { reason } : {}),
+    });
+  });
+
+  app.delete("/annotations/:id", async (req) => {
+    const p = z.object({ id: z.string().startsWith("ann_") }).parse(req.params);
+    const q = ActorReasonBody.parse(req.query);
+    const result = await annotationService.delete({
+      workspaceId: q.workspaceId,
+      id: p.id,
+      ...(q.actorId !== undefined ? { actorId: q.actorId } : {}),
+      ...(q.reason !== undefined ? { reason: q.reason } : {}),
+    });
+    return { ok: true, ...result };
   });
 }

@@ -124,6 +124,114 @@ export const ReSyncCampaignSchema = z.object({
   reason: ReasonSchema.optional(),
 });
 
+// ── Generic workspace-scoped body patterns ──
+
+export const ActorReasonBody = z.object({
+  workspaceId: WorkspaceIdSchema,
+  actorId: ActorIdSchema.optional(),
+  reason: ReasonSchema.optional(),
+});
+
+// ── Assets (P2) ──
+
+export const AssetKindSchema = z.enum([
+  "HEADLINE_SET",
+  "DESCRIPTION_SET",
+  "IMAGE",
+  "VIDEO",
+  "LANDING_PAGE",
+  "TEXT_BLOCK",
+]);
+
+export const PatchAssetSchema = z
+  .object({
+    name: z.string().min(1).max(200).optional(),
+    description: z.string().max(1000).nullable().optional(),
+    actorId: ActorIdSchema.optional(),
+    reason: ReasonSchema.optional(),
+  })
+  .refine((v) => v.name !== undefined || v.description !== undefined, {
+    message: "PATCH body must contain at least one mutable field",
+  });
+
+export const PatchAssetVersionContentSchema = z.object({
+  workspaceId: WorkspaceIdSchema,
+  content: z.unknown(),
+  actorId: ActorIdSchema.optional(),
+  reason: ReasonSchema.optional(),
+});
+
+// ── Initiatives (P2) ──
+
+export const PatchInitiativeSchema = z
+  .object({
+    title: z.string().min(1).max(200).optional(),
+    goal: z.string().min(1).max(1000).optional(),
+    hypothesis: z.string().max(2000).nullable().optional(),
+    successCriteria: z.string().max(2000).nullable().optional(),
+    modules: z.array(z.string()).optional(),
+    outcomeLadder: z.array(z.string()).optional(),
+    learnQuestions: z.array(z.string()).optional(),
+    assumptions: z.array(z.string()).optional(),
+    risks: z.array(z.string()).optional(),
+    startsAt: z.coerce.date().nullable().optional(),
+    endsAt: z.coerce.date().nullable().optional(),
+    metadata: z.record(z.unknown()).optional(),
+    actorId: ActorIdSchema.optional(),
+    reason: ReasonSchema.optional(),
+  })
+  .refine(
+    (v) =>
+      v.title !== undefined ||
+      v.goal !== undefined ||
+      v.hypothesis !== undefined ||
+      v.successCriteria !== undefined ||
+      v.modules !== undefined ||
+      v.outcomeLadder !== undefined ||
+      v.learnQuestions !== undefined ||
+      v.assumptions !== undefined ||
+      v.risks !== undefined ||
+      v.startsAt !== undefined ||
+      v.endsAt !== undefined ||
+      v.metadata !== undefined,
+    { message: "PATCH body must contain at least one mutable field" },
+  );
+
+// ── Annotations (P2) ──
+
+export const PatchAnnotationSchema = z
+  .object({
+    body: z.string().min(1).max(4000).optional(),
+    pinned: z.boolean().optional(),
+    occurredAt: z.coerce.date().optional(),
+    actorId: ActorIdSchema.optional(),
+    reason: ReasonSchema.optional(),
+  })
+  .refine(
+    (v) => v.body !== undefined || v.pinned !== undefined || v.occurredAt !== undefined,
+    { message: "PATCH body must contain at least one mutable field" },
+  );
+
+// ── Proposals (P2) ──
+
+export const PatchProposalSchema = z
+  .object({
+    title: z.string().min(1).max(200).optional(),
+    rationale: z.string().min(1).max(4000).optional(),
+    impact: z.string().max(2000).nullable().optional(),
+    examples: z.array(z.string()).optional(),
+    actorId: ActorIdSchema.optional(),
+    reason: ReasonSchema.optional(),
+  })
+  .refine(
+    (v) =>
+      v.title !== undefined ||
+      v.rationale !== undefined ||
+      v.impact !== undefined ||
+      v.examples !== undefined,
+    { message: "PATCH body must contain at least one mutable field" },
+  );
+
 export const CreateInitiativeSchema = z.object({
   workspaceId: WorkspaceIdSchema,
   title: z.string().min(1).max(200),
