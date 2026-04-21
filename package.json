@@ -19,6 +19,7 @@
     "seed:welle1": "tsx --env-file=.env scripts/seed-welle1.ts",
     "setup:google-ads": "tsx --env-file=.env scripts/setup-google-ads.ts",
     "resync:welle1": "tsx --env-file=.env scripts/resync-welle1.ts",
+    "delete:campaigns": "tsx --env-file=.env scripts/delete-campaigns.ts",
     "smoke": "tsx scripts/smoke.ts",
     "test": "node --test --import tsx tests/**/*.test.ts"
   },
