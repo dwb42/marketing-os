@@ -347,7 +347,95 @@ Zulässig für Campaign-Status `APPROVED | SYNCED | PAUSED`. Schreibt `channel_c
 
 Response shape identisch zu `/sync`.
 
-**Bewusst nicht enthalten:** In-place-Update einer bestehenden Google-Ads-Campaign (Headlines/Keywords/Bids ändern, ohne neue Campaign anzulegen). Dafür fehlen im Connector die `update*`-Methoden; solange das so ist, bedeutet Re-Sync immer "neue externe Campaign".
+**Bewusst nicht enthalten:** Full-diff-basiertes In-place-Re-Sync (automatischer Abgleich APPROVED-AssetVersion vs. Ist-Zustand in Google Ads). Für granulare Edits ohne Campaign-Neuanlage siehe `## Channel Mutations (in-place Google Ads edits)` weiter unten — einzelne Add/Update/Pause/Remove-Endpoints pro Ebene.
+
+## Channel Mutations (in-place Google Ads edits)
+
+Alle Endpoints in diesem Abschnitt pushen einzelne Änderungen an einer bereits synchronisierten Google-Ads-Struktur. Gemeinsame Eigenschaften:
+
+- Rolle `media-buyer` oder `operator` erforderlich (sonst 403 `FORBIDDEN`).
+- Ruft den Google-Ads-Connector direkt auf, spiegelt das Ergebnis sofort in die OS-DB und emittiert einen `ChangeEvent` sowie einen `SyncRun` vom Typ `PUSH_CAMPAIGN`.
+- Die nächste `POST /campaigns/:id/structure/sync` reconciled alles was Google Ads zwischendurch noch geändert hat (Policy-Approval, bid adjustments, …).
+- Response-Shape grundsätzlich `{ ok: true, syncRunId: "syn_…", … }`.
+
+### `POST /channel-campaigns/:ccId/status`
+```json
+{ "workspaceId": "wsp_…", "status": "PAUSED", "actorId": "act_…", "reason": "rollout pausiert" }
+```
+`status ∈ { "ENABLED", "PAUSED" }`. Setzt die externe Campaign + lokale ChannelCampaign (`SYNCED | PAUSED`). ChangeEvent: `channel_campaign.status_pushed`.
+
+### `POST /channel-campaigns/:ccId/budget`
+```json
+{ "workspaceId": "wsp_…", "amountEur": 30, "actorId": "act_…" }
+```
+oder `{ "amountMicros": "30000000" }`. Ändert `amount_micros` auf dem bestehenden Campaign-Budget-Resource (keine Neuanlage). ChangeEvent: `channel_campaign.budget_updated`.
+
+### `POST /channel-campaigns/:ccId/negative-keywords`
+```json
+{ "workspaceId": "wsp_…", "keywords": [{ "text": "kostenlos", "matchType": "BROAD" }], "actorId": "act_…" }
+```
+Legt campaign-level Negative-Keywords an und spiegelt jede in `ChannelKeyword` (scope=CAMPAIGN). ChangeEvent pro Keyword: `channel_keyword.negative_added`.
+
+### `POST /channel-ad-groups/:agId/status`
+Analog zu `channel-campaigns/:ccId/status`, für Ad Groups. ChangeEvent: `channel_ad_group.status_pushed`.
+
+### `POST /channel-ad-groups/:agId/bid`
+```json
+{ "workspaceId": "wsp_…", "cpcBidMicros": "2500000", "actorId": "act_…" }
+```
+Update des Default-CPC-Gebots. ChangeEvent: `channel_ad_group.bid_pushed`.
+
+### `POST /channel-ad-groups/:agId/keywords`
+```json
+{
+  "workspaceId": "wsp_…",
+  "keywords": [
+    { "text": "pflegegeld antrag hilfe", "matchType": "PHRASE" },
+    { "text": "pflegegrad 2 beantragen", "matchType": "EXACT", "cpcBidMicros": "3000000" }
+  ],
+  "addHealthPolicyExemption": true,
+  "actorId": "act_…"
+}
+```
+Positive oder negative (mit `"negative": true`) Keywords zur Ad Group. `addHealthPolicyExemption: true` hängt den `HEALTH_IN_PERSONALIZED_ADS` Exemption-Key an (Pflicht in Pflege-Vertical, sonst REJECTED). ChangeEvent pro Keyword: `channel_keyword.added` / `channel_keyword.negative_added`.
+
+### `POST /channel-ad-groups/:agId/ads`
+```json
+{
+  "workspaceId": "wsp_…",
+  "content": {
+    "headlines": ["…", "…", "…"],
+    "descriptions": ["…", "…"],
+    "finalUrls": ["https://pflegeberatung.b42.io/?utm_…"],
+    "path1": "pflegegeld",
+    "path2": "hilfe"
+  },
+  "paused": true,
+  "actorId": "act_…"
+}
+```
+Erstellt eine neue RSA-Ad in der bestehenden Ad Group. Min 3 Headlines (max 15, je ≤30 Zeichen), min 2 Descriptions (max 4, je ≤90 Zeichen). `paused: true` startet sie im PAUSED-State — nützlich zum Vorbereiten eines v03-Ads, bevor das v02-Ad pausiert wird. ChangeEvent: `channel_ad.added`.
+
+### `POST /channel-ads/:adId/status`
+Pause/Enable einer einzelnen RSA-Ad. ChangeEvent: `channel_ad.status_pushed`.
+
+### `PATCH /channel-ads/:adId`
+```json
+{
+  "workspaceId": "wsp_…",
+  "headlines": [{ "text": "…" }, …],
+  "descriptions": [{ "text": "…" }, …],
+  "path1": "pflegegeld",
+  "finalUrls": ["https://…"]
+}
+```
+Update-Mask wird automatisch aus den gesetzten Feldern gebaut. Google Ads verlangt, dass bei Änderung der Headlines ODER Descriptions jeweils **alle** Einträge mitgesendet werden. ChangeEvent: `channel_ad.content_pushed` mit before/after-Snapshot.
+
+### `POST /channel-keywords/:kwId/status`
+Pause/Enable eines einzelnen Keywords (positiv oder negativ). ChangeEvent: `channel_keyword.status_pushed`.
+
+### `DELETE /channel-keywords/:kwId?workspaceId=…&actorId=…&reason=…`
+Hard-Remove auf Google-Ads-Seite (`remove` op). Lokal wird der `ChannelKeyword`-Status auf `REMOVED` gesetzt, nicht hart gelöscht — damit bleibt `KeywordPerformanceDaily` erhalten. ChangeEvent: `channel_keyword.removed` / `channel_keyword.negative_removed`.
 
 ## Health & Discovery
 

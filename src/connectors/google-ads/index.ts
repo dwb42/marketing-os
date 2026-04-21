@@ -385,6 +385,421 @@ export class GoogleAdsConnector implements ChannelConnector {
     );
   }
 
+  // ── In-place mutations on existing Google Ads entities ───────────
+
+  // Status transitions on ENABLED/PAUSED. The Google Ads API models REMOVED
+  // as a separate `remove` operation; use removeCriterion*() for that.
+  async mutateCampaignStatus(
+    customerId: string,
+    externalCampaignId: string,
+    status: "ENABLED" | "PAUSED",
+  ): Promise<void> {
+    this.ensureAuthenticated();
+    await googleAdsRequest(
+      "POST",
+      `${BASE}/customers/${customerId}/campaigns:mutate`,
+      this.accessToken!,
+      this.developerToken!,
+      {
+        operations: [
+          {
+            update: {
+              resourceName: `customers/${customerId}/campaigns/${externalCampaignId}`,
+              status,
+            },
+            updateMask: "status",
+          },
+        ],
+      },
+      this.loginCustomerId,
+    );
+  }
+
+  async mutateAdGroupStatus(
+    customerId: string,
+    externalAdGroupId: string,
+    status: "ENABLED" | "PAUSED",
+  ): Promise<void> {
+    this.ensureAuthenticated();
+    await googleAdsRequest(
+      "POST",
+      `${BASE}/customers/${customerId}/adGroups:mutate`,
+      this.accessToken!,
+      this.developerToken!,
+      {
+        operations: [
+          {
+            update: {
+              resourceName: `customers/${customerId}/adGroups/${externalAdGroupId}`,
+              status,
+            },
+            updateMask: "status",
+          },
+        ],
+      },
+      this.loginCustomerId,
+    );
+  }
+
+  async mutateAdGroupAdStatus(
+    customerId: string,
+    externalAdGroupId: string,
+    externalAdId: string,
+    status: "ENABLED" | "PAUSED",
+  ): Promise<void> {
+    this.ensureAuthenticated();
+    await googleAdsRequest(
+      "POST",
+      `${BASE}/customers/${customerId}/adGroupAds:mutate`,
+      this.accessToken!,
+      this.developerToken!,
+      {
+        operations: [
+          {
+            update: {
+              resourceName: `customers/${customerId}/adGroupAds/${externalAdGroupId}~${externalAdId}`,
+              status,
+            },
+            updateMask: "status",
+          },
+        ],
+      },
+      this.loginCustomerId,
+    );
+  }
+
+  async mutateAdGroupCriterionStatus(
+    customerId: string,
+    externalAdGroupId: string,
+    externalCriterionId: string,
+    status: "ENABLED" | "PAUSED",
+  ): Promise<void> {
+    this.ensureAuthenticated();
+    await googleAdsRequest(
+      "POST",
+      `${BASE}/customers/${customerId}/adGroupCriteria:mutate`,
+      this.accessToken!,
+      this.developerToken!,
+      {
+        operations: [
+          {
+            update: {
+              resourceName: `customers/${customerId}/adGroupCriteria/${externalAdGroupId}~${externalCriterionId}`,
+              status,
+            },
+            updateMask: "status",
+          },
+        ],
+      },
+      this.loginCustomerId,
+    );
+  }
+
+  async mutateCampaignCriterionStatus(
+    customerId: string,
+    externalCampaignId: string,
+    externalCriterionId: string,
+    status: "ENABLED" | "PAUSED",
+  ): Promise<void> {
+    this.ensureAuthenticated();
+    await googleAdsRequest(
+      "POST",
+      `${BASE}/customers/${customerId}/campaignCriteria:mutate`,
+      this.accessToken!,
+      this.developerToken!,
+      {
+        operations: [
+          {
+            update: {
+              resourceName: `customers/${customerId}/campaignCriteria/${externalCampaignId}~${externalCriterionId}`,
+              status,
+            },
+            updateMask: "status",
+          },
+        ],
+      },
+      this.loginCustomerId,
+    );
+  }
+
+  async updateAdGroupBid(
+    customerId: string,
+    externalAdGroupId: string,
+    cpcBidMicros: bigint,
+  ): Promise<void> {
+    this.ensureAuthenticated();
+    await googleAdsRequest(
+      "POST",
+      `${BASE}/customers/${customerId}/adGroups:mutate`,
+      this.accessToken!,
+      this.developerToken!,
+      {
+        operations: [
+          {
+            update: {
+              resourceName: `customers/${customerId}/adGroups/${externalAdGroupId}`,
+              cpcBidMicros: cpcBidMicros.toString(),
+            },
+            updateMask: "cpc_bid_micros",
+          },
+        ],
+      },
+      this.loginCustomerId,
+    );
+  }
+
+  // RSA content update. Google Ads rejects partial updates to the nested
+  // responsive_search_ad object — headlines + descriptions must be re-sent in
+  // full even if only one is changed.
+  async updateResponsiveSearchAd(
+    customerId: string,
+    externalAdGroupId: string,
+    externalAdId: string,
+    patch: {
+      headlines?: Array<{ text: string; pinnedField?: string | null }>;
+      descriptions?: Array<{ text: string; pinnedField?: string | null }>;
+      path1?: string | null;
+      path2?: string | null;
+      finalUrls?: string[];
+    },
+  ): Promise<void> {
+    this.ensureAuthenticated();
+
+    const updateMask: string[] = [];
+    const adBody: Record<string, unknown> = {
+      resourceName: `customers/${customerId}/ads/${externalAdId}`,
+    };
+    const rsa: Record<string, unknown> = {};
+
+    if (patch.headlines !== undefined) {
+      rsa.headlines = patch.headlines.slice(0, 15).map((h) => ({
+        text: h.text.slice(0, 30),
+        pinnedField: h.pinnedField ?? null,
+      }));
+      updateMask.push("responsive_search_ad.headlines");
+    }
+    if (patch.descriptions !== undefined) {
+      rsa.descriptions = patch.descriptions.slice(0, 4).map((d) => ({
+        text: d.text.slice(0, 90),
+        pinnedField: d.pinnedField ?? null,
+      }));
+      updateMask.push("responsive_search_ad.descriptions");
+    }
+    if (patch.path1 !== undefined) {
+      rsa.path1 = patch.path1;
+      updateMask.push("responsive_search_ad.path1");
+    }
+    if (patch.path2 !== undefined) {
+      rsa.path2 = patch.path2;
+      updateMask.push("responsive_search_ad.path2");
+    }
+
+    if (Object.keys(rsa).length > 0) {
+      adBody.responsiveSearchAd = rsa;
+    }
+    if (patch.finalUrls !== undefined) {
+      adBody.finalUrls = patch.finalUrls;
+      updateMask.push("final_urls");
+    }
+
+    if (updateMask.length === 0) return;
+
+    await googleAdsRequest(
+      "POST",
+      `${BASE}/customers/${customerId}/ads:mutate`,
+      this.accessToken!,
+      this.developerToken!,
+      {
+        operations: [
+          {
+            update: adBody,
+            updateMask: updateMask.join(","),
+          },
+        ],
+      },
+      this.loginCustomerId,
+    );
+  }
+
+  async addResponsiveSearchAd(
+    customerId: string,
+    externalAdGroupId: string,
+    content: {
+      headlines: string[];
+      descriptions: string[];
+      finalUrls: string[];
+      path1?: string | null;
+      path2?: string | null;
+    },
+    opts: { status?: "ENABLED" | "PAUSED" } = {},
+  ): Promise<{ externalId: string; resourceName: string }> {
+    this.ensureAuthenticated();
+    const res = (await googleAdsRequest(
+      "POST",
+      `${BASE}/customers/${customerId}/adGroupAds:mutate`,
+      this.accessToken!,
+      this.developerToken!,
+      {
+        operations: [
+          {
+            create: {
+              adGroup: `customers/${customerId}/adGroups/${externalAdGroupId}`,
+              status: opts.status ?? "ENABLED",
+              ad: {
+                responsiveSearchAd: {
+                  headlines: content.headlines.slice(0, 15).map((text) => ({
+                    text: text.slice(0, 30),
+                    pinnedField: null,
+                  })),
+                  descriptions: content.descriptions.slice(0, 4).map((text) => ({
+                    text: text.slice(0, 90),
+                    pinnedField: null,
+                  })),
+                  path1: content.path1 ?? null,
+                  path2: content.path2 ?? null,
+                },
+                finalUrls: content.finalUrls,
+              },
+            },
+          },
+        ],
+      },
+      this.loginCustomerId,
+    )) as { results: Array<{ resourceName: string }> };
+
+    const resourceName = res.results[0]!.resourceName;
+    // adGroupAds resource shape: customers/{cid}/adGroupAds/{ag}~{ad}
+    const externalId = resourceName.split("~").pop()!;
+    return { externalId, resourceName };
+  }
+
+  async addAdGroupKeywords(
+    customerId: string,
+    externalAdGroupId: string,
+    keywords: Array<{
+      text: string;
+      matchType: "EXACT" | "PHRASE" | "BROAD";
+      cpcBidMicros?: bigint;
+      negative?: boolean;
+    }>,
+    opts: { addHealthPolicyExemption?: boolean } = {},
+  ): Promise<Array<{ externalId: string; resourceName: string; text: string }>> {
+    if (keywords.length === 0) return [];
+    this.ensureAuthenticated();
+
+    const adGroupResource = `customers/${customerId}/adGroups/${externalAdGroupId}`;
+    const res = (await googleAdsRequest(
+      "POST",
+      `${BASE}/customers/${customerId}/adGroupCriteria:mutate`,
+      this.accessToken!,
+      this.developerToken!,
+      {
+        operations: keywords.map((kw) => {
+          const op: Record<string, unknown> = {
+            create: {
+              adGroup: adGroupResource,
+              keyword: { text: kw.text, matchType: kw.matchType },
+              ...(kw.negative ? { negative: true } : {}),
+              ...(kw.cpcBidMicros !== undefined
+                ? { cpcBidMicros: kw.cpcBidMicros.toString() }
+                : {}),
+            },
+          };
+          if (opts.addHealthPolicyExemption && !kw.negative) {
+            op.exemptPolicyViolationKeys = [
+              { policyName: "HEALTH_IN_PERSONALIZED_ADS", violatingText: kw.text },
+            ];
+          }
+          return op;
+        }),
+      },
+      this.loginCustomerId,
+    )) as { results: Array<{ resourceName: string }> };
+
+    return res.results.map((r, i) => ({
+      externalId: r.resourceName.split("~").pop()!,
+      resourceName: r.resourceName,
+      text: keywords[i]!.text,
+    }));
+  }
+
+  async addCampaignNegativeKeywords(
+    customerId: string,
+    externalCampaignId: string,
+    keywords: Array<{ text: string; matchType: "EXACT" | "PHRASE" | "BROAD" }>,
+  ): Promise<Array<{ externalId: string; resourceName: string; text: string }>> {
+    if (keywords.length === 0) return [];
+    this.ensureAuthenticated();
+
+    const campaignResource = `customers/${customerId}/campaigns/${externalCampaignId}`;
+    const res = (await googleAdsRequest(
+      "POST",
+      `${BASE}/customers/${customerId}/campaignCriteria:mutate`,
+      this.accessToken!,
+      this.developerToken!,
+      {
+        operations: keywords.map((kw) => ({
+          create: {
+            campaign: campaignResource,
+            negative: true,
+            keyword: { text: kw.text, matchType: kw.matchType },
+          },
+        })),
+      },
+      this.loginCustomerId,
+    )) as { results: Array<{ resourceName: string }> };
+
+    return res.results.map((r, i) => ({
+      externalId: r.resourceName.split("~").pop()!,
+      resourceName: r.resourceName,
+      text: keywords[i]!.text,
+    }));
+  }
+
+  async removeAdGroupCriterion(
+    customerId: string,
+    externalAdGroupId: string,
+    externalCriterionId: string,
+  ): Promise<void> {
+    this.ensureAuthenticated();
+    await googleAdsRequest(
+      "POST",
+      `${BASE}/customers/${customerId}/adGroupCriteria:mutate`,
+      this.accessToken!,
+      this.developerToken!,
+      {
+        operations: [
+          {
+            remove: `customers/${customerId}/adGroupCriteria/${externalAdGroupId}~${externalCriterionId}`,
+          },
+        ],
+      },
+      this.loginCustomerId,
+    );
+  }
+
+  async removeCampaignCriterion(
+    customerId: string,
+    externalCampaignId: string,
+    externalCriterionId: string,
+  ): Promise<void> {
+    this.ensureAuthenticated();
+    await googleAdsRequest(
+      "POST",
+      `${BASE}/customers/${customerId}/campaignCriteria:mutate`,
+      this.accessToken!,
+      this.developerToken!,
+      {
+        operations: [
+          {
+            remove: `customers/${customerId}/campaignCriteria/${externalCampaignId}~${externalCriterionId}`,
+          },
+        ],
+      },
+      this.loginCustomerId,
+    );
+  }
+
   // Setzt final_url_suffix auf Campaign-Level. Google hängt den Suffix
   // automatisch an jeden Final-URL-Klick an (inkl. ValueTrack-Expansion
   // wie {adgroupid}, {keyword}, {gclid}). Pflicht, damit OS-seitige
