@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { proposalService } from "../../services/proposal.service.js";
-import { WorkspaceIdSchema } from "../schemas.js";
+import { DeleteProposalQuerySchema, WorkspaceIdSchema } from "../schemas.js";
 
 const Area = z.enum(["data_model", "api", "reporting", "workflow", "other"]);
 
@@ -25,5 +25,17 @@ export async function registerProposalRoutes(app: FastifyInstance): Promise<void
   app.get("/proposals", async (req) => {
     const q = z.object({ workspaceId: WorkspaceIdSchema, area: Area.optional() }).parse(req.query);
     return proposalService.list(q.workspaceId, q.area);
+  });
+
+  app.delete("/proposals/:id", async (req) => {
+    const p = z.object({ id: z.string().startsWith("chg_") }).parse(req.params);
+    const q = DeleteProposalQuerySchema.parse(req.query);
+    const result = await proposalService.delete({
+      workspaceId: q.workspaceId,
+      proposalId: p.id,
+      ...(q.actorId !== undefined ? { actorId: q.actorId } : {}),
+      ...(q.reason !== undefined ? { reason: q.reason } : {}),
+    });
+    return { ok: true, ...result };
   });
 }

@@ -8,7 +8,17 @@ const API_INDEX = {
   groups: {
     tenancy: ["GET /workspaces", "POST /workspaces", "POST /brands", "POST /products", "GET /products", "POST /audience-segments"],
     initiatives: ["POST /initiatives", "GET /initiatives/:id/timeline"],
-    campaigns: ["POST /campaigns", "GET /campaigns", "GET /campaigns/:id", "POST /campaigns/:id/transition"],
+    campaigns: [
+      "POST /campaigns",
+      "GET /campaigns",
+      "GET /campaigns/:id",
+      "PATCH /campaigns/:id",
+      "DELETE /campaigns/:id?workspaceId=&actorId=&reason=",
+      "POST /campaigns/:id/transition",
+      "POST /campaigns/:id/assets",
+      "GET /campaigns/:id/assets",
+      "DELETE /campaigns/:id/assets/:assetId/:role",
+    ],
     assets: [
       "POST /assets",
       "POST /assets/:id/versions",
@@ -29,7 +39,13 @@ const API_INDEX = {
     ],
     annotations: ["POST /annotations", "GET /annotations"],
     reporting: ["GET /performance", "GET /outcomes", "POST /outcomes", "GET /changelog"],
-    sync: ["POST /sync-runs", "GET /sync-runs", "GET /sync-runs/:id", "POST /campaigns/:id/sync"],
+    sync: [
+      "POST /sync-runs",
+      "GET /sync-runs",
+      "GET /sync-runs/:id",
+      "POST /campaigns/:id/sync",
+      "POST /campaigns/:id/re-sync",
+    ],
     clusters: [
       "POST /clusters",
       "GET /clusters",
@@ -43,7 +59,7 @@ const API_INDEX = {
       "GET /findings/:id",
       "POST /findings/:id/status",
     ],
-    proposals: ["POST /proposals", "GET /proposals"],
+    proposals: ["POST /proposals", "GET /proposals", "DELETE /proposals/:id"],
     search: ["GET /search?workspaceId=&q=&initiativeId=&clusterId=&status=&from=&to="],
     health: ["GET /health"],
   },

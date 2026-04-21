@@ -87,6 +87,30 @@ Liefert einen kombinierten Stream aus ChangeEvents, Annotations, Performance und
 ```
 Erlaubte Transitions siehe `docs/domain/campaign-lifecycle.md`.
 
+### `PATCH /campaigns/:id?workspaceId=…`
+Edit mutable Felder. Nur im Status `DRAFT | IN_REVIEW` erlaubt. Liefert das aktualisierte Campaign-Objekt. Mindestens ein Feld ist Pflicht.
+```json
+{ "name": "…", "objective": "…", "initiativeId": "ini_…|null", "audienceSegmentId": "aud_…|null", "startsAt": "2026-…|null", "endsAt": "2026-…|null", "actorId": "act_…", "reason": "optional" }
+```
+`INVALID_STATE` falls Status `APPROVED | SYNCED | PAUSED | ARCHIVED`. Schreibt `campaign.patched` ChangeEvent mit `payload.before` / `payload.after`.
+
+### `DELETE /campaigns/:id?workspaceId=…&actorId=…&reason=…`
+Hard-Delete inkl. Cascade (ChannelCampaign → ChannelAdGroup → ChannelAd / ChannelKeyword + alle Performance-Tabellen + CampaignAsset-Links) und Purge der polymorphen Refs (ChangeEvent, Annotation, Approval, SyncRun) auf allen Child-Subject-IDs. Nur im Status `DRAFT | ARCHIVED` erlaubt. Eine `campaign.deleted`-ChangeEvent bleibt als Audit-Spur erhalten; deren ID kommt zurück als `correctsId`.
+Response: `{ "ok": true, "deleted": true, "correctsId": "chg_…" }`.
+
+### `POST /campaigns/:id/assets?workspaceId=…`
+Verknüpft Asset mit Campaign unter einer Rolle (`ads_rsa`, `landing_page`, …). Nur im Status `DRAFT | IN_REVIEW`. Idempotent — existiert der `(campaignId, assetId, role)`-Link bereits, kommt `{ linked: false }` zurück, sonst `{ linked: true }`.
+```json
+{ "assetId": "ast_…", "role": "ads_rsa", "actorId": "act_…", "reason": "optional" }
+```
+Schreibt `campaign_asset.linked` ChangeEvent.
+
+### `GET /campaigns/:id/assets?workspaceId=…`
+Listet `CampaignAsset`-Zeilen inkl. `asset` und dessen jüngster `APPROVED`-Version.
+
+### `DELETE /campaigns/:id/assets/:assetId/:role?workspaceId=…&actorId=…&reason=…`
+Löst die Verknüpfung. Nur im Status `DRAFT | IN_REVIEW`. Response: `{ ok: true, unlinked: true|false }`. `campaign_asset.unlinked` ChangeEvent.
+
 ## Assets
 
 ### `POST /assets`
@@ -235,6 +259,9 @@ Antwort: `{ "id": "syn_…", "reused": false }`. Idempotent über `(workspaceId,
 
 ### `GET /proposals?workspaceId=…&area=data_model`
 
+### `DELETE /proposals/:id?workspaceId=…&actorId=…&reason=…`
+Hard-Delete eines Proposal-Eintrags (intern `ChangeEvent subjectType=PLATFORM kind=proposal.submitted`). Sinn: Smoke-Test-Einträge aufräumen. Wird durch eine `proposal.deleted`-ChangeEvent ersetzt, die `correctsId` auf die gelöschte Proposal-ID setzt und `originalSummary`/`originalPayload` im Payload konserviert. Response: `{ ok: true, deleted: true, correctsId: "chg_…" }`.
+
 ## IntentCluster
 
 ### `POST /clusters`
@@ -308,6 +335,19 @@ Voraussetzungen:
 - ChannelConnection für GOOGLE_ADS existiert im Workspace
 - Assets mit APPROVED Versions verknüpft (Headlines, Descriptions, Keywords, Target URL)
 - Google Ads Env-Vars konfiguriert
+
+### `POST /campaigns/:id/re-sync`
+Pusht dieselbe interne Campaign erneut nach Google Ads. Legt dabei eine **neue** externe Google-Ads-Campaign + eine neue `ChannelCampaign`-Zeile an; alte `ChannelCampaign`-Zeilen bleiben als Historie erhalten. Der externe Name bekommt automatisch den Suffix `— resync N` (N = Anzahl bestehender ChannelCampaigns + 1), damit Google Ads den Namens-Duplikat-Check besteht. Erfordert Rolle `media-buyer` oder `operator`.
+
+Zulässig für Campaign-Status `APPROVED | SYNCED | PAUSED`. Schreibt `channel_campaign.re_synced` + `campaign.re_synced` ChangeEvents.
+
+```json
+{ "workspaceId": "wsp_…", "actorId": "act_…", "reason": "v03 content rollout" }
+```
+
+Response shape identisch zu `/sync`.
+
+**Bewusst nicht enthalten:** In-place-Update einer bestehenden Google-Ads-Campaign (Headlines/Keywords/Bids ändern, ohne neue Campaign anzulegen). Dafür fehlen im Connector die `update*`-Methoden; solange das so ist, bedeutet Re-Sync immer "neue externe Campaign".
 
 ## Health & Discovery
 

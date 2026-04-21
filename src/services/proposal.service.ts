@@ -1,5 +1,6 @@
 import { prisma } from "./prisma.js";
 import { newId } from "../lib/ids.js";
+import { notFound } from "../lib/errors.js";
 import { changeEventService } from "./change-event.service.js";
 
 // Agenten können Verbesserungsvorschläge zur Plattform selbst einreichen.
@@ -50,6 +51,47 @@ export class ProposalService {
       },
       orderBy: { at: "desc" },
     });
+  }
+
+  async delete(params: {
+    workspaceId: string;
+    proposalId: string;
+    actorId?: string;
+    reason?: string;
+  }): Promise<{ deleted: true; correctsId: string }> {
+    const existing = await prisma.changeEvent.findFirst({
+      where: {
+        id: params.proposalId,
+        workspaceId: params.workspaceId,
+        subjectType: "PLATFORM",
+        kind: "proposal.submitted",
+      },
+    });
+    if (!existing) throw notFound("Proposal", params.proposalId);
+
+    const correctsId = newId("changeEvent");
+    await prisma.$transaction([
+      prisma.changeEvent.create({
+        data: {
+          id: correctsId,
+          workspaceId: params.workspaceId,
+          subjectType: "PLATFORM",
+          subjectId: existing.subjectId,
+          actorId: params.actorId ?? null,
+          kind: "proposal.deleted",
+          summary: `Proposal "${existing.summary}" deleted`,
+          correctsId: params.proposalId,
+          payload: {
+            originalSummary: existing.summary,
+            originalPayload: existing.payload,
+            reason: params.reason ?? null,
+          },
+        },
+      }),
+      prisma.changeEvent.delete({ where: { id: params.proposalId } }),
+    ]);
+
+    return { deleted: true, correctsId };
   }
 }
 

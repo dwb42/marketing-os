@@ -75,6 +75,55 @@ export const IngestOutcomeSchema = z.object({
   payload: z.record(z.unknown()).optional(),
 });
 
+export const AudienceSegmentIdSchema = z.string().startsWith("aud_");
+
+export const ActorIdSchema = z.string().min(1).max(200);
+export const ReasonSchema = z.string().max(500);
+export const CampaignAssetRoleSchema = z.string().min(1).max(100);
+
+export const LinkCampaignAssetSchema = z.object({
+  assetId: AssetIdSchema,
+  role: CampaignAssetRoleSchema,
+  actorId: ActorIdSchema.optional(),
+  reason: ReasonSchema.optional(),
+});
+
+export const PatchCampaignSchema = z
+  .object({
+    name: z.string().min(1).max(200).optional(),
+    objective: z.string().min(1).max(500).optional(),
+    initiativeId: InitiativeIdSchema.nullable().optional(),
+    audienceSegmentId: AudienceSegmentIdSchema.nullable().optional(),
+    startsAt: z.coerce.date().nullable().optional(),
+    endsAt: z.coerce.date().nullable().optional(),
+    actorId: ActorIdSchema.optional(),
+    reason: ReasonSchema.optional(),
+  })
+  .refine(
+    (v) =>
+      v.name !== undefined ||
+      v.objective !== undefined ||
+      v.initiativeId !== undefined ||
+      v.audienceSegmentId !== undefined ||
+      v.startsAt !== undefined ||
+      v.endsAt !== undefined,
+    { message: "PATCH body must contain at least one mutable field" },
+  );
+
+export const DeleteCampaignQuerySchema = z.object({
+  workspaceId: WorkspaceIdSchema,
+  actorId: ActorIdSchema.optional(),
+  reason: ReasonSchema.optional(),
+});
+
+export const DeleteProposalQuerySchema = DeleteCampaignQuerySchema;
+
+export const ReSyncCampaignSchema = z.object({
+  workspaceId: WorkspaceIdSchema,
+  actorId: ActorIdSchema.optional(),
+  reason: ReasonSchema.optional(),
+});
+
 export const CreateInitiativeSchema = z.object({
   workspaceId: WorkspaceIdSchema,
   title: z.string().min(1).max(200),
